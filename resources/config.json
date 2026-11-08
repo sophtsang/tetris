@@ -1,0 +1,8 @@
+{
+  "width": 10,
+  "height": 20,
+  "gravity": 20,
+  "gravity_decrease": 10,
+  "lock_delay": 15,
+  "random_seed": [6, 7, 6, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+}

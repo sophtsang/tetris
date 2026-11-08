@@ -1,0 +1,8 @@
+ver = "0.4.1"
+
+name = "Runt Tests"
+
+[[tests]]
+name = "Single Player Tests"
+paths = ["single-player/*.txt"]
+cmd = "../target/release/tetris --simulate-inputs-single-player {} --resources ../resources"
