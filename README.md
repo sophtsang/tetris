@@ -63,15 +63,6 @@ specify what you need to put in this below as well.
 (2), (3), and (4) will be due Nov 18 and will possibly contain edits to your work
 submitted for (1).
 
-### AI Policy
-As a reminder, you must not use LLMs to generate any part of your submission,
-including code, comments, or writing in your design doc. Asking an LLM how to
-implement something and using that as inspiration violates this policy.
-
-We discourage, but begrudgingly allow the use of LLMs for seeking out
-documentation or descriptions of high level concepts. Though, please seek 
-official docs or reach out to a TA through OH or Ed first!
-
 ## Part 1: Single Player Tetris
 You will implement a binary which simulates a game of Tetris given a list of
 inputs describing what a player's action on every frame of gameplay.
@@ -572,9 +563,7 @@ Your document should include the following sections
   verification effort towards.
 4. Work Credit: If you worked in a group, say who did what.
 5. Known Issues: If there is something you know doesn't work, describe it here.
-6. AI Usage: If you used any AI tools describe how you used them. We are
-  curious how you use the tools, especially given the limiting AI policy.
-7. Meta Comments: Write any opinions on the assignment. Some things we are
+6. Meta Comments: Write any opinions on the assignment. Some things we are
   curious about are:
   - how long did you spend on the assignment, which parts took the longest?
   - what did you like and dislike about the assignment, why?
