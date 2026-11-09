@@ -54,12 +54,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     // TODO: init Game, run game loop
     let game = Game::new(config, tetrominoes);
 
-    loop {
-        match game.update() {
-            GameState::Playing => {},
-            GameState::ToppedOut => { break; }
-        }
-    }
+    // loop {
+    //     match game.update() {
+    //         GameState::Playing => {},
+    //         GameState::ToppedOut => { break; }
+    //     }
+    // }
 
     Ok(())
 }
