@@ -34,84 +34,28 @@ fixed-length array).
   - what did you like and dislike about the assignment, why?
   - is there anything you'd like to change about the assignment?
 
-## Part 1: Single-Player Tetris
-i am supposed to implement single player tetris, where i can imagine 
+___ 
 
-### in ```main.rs```:
-the parent thread or main server that launches 1 or 2 child threads for single player or multiplayer, respectively
-spawn threads and then like check on_tick() whether a thread has finished some rows -> garbage given to the other thread
+## Game Loop
+Most of the game logic is confined within ```Game```, which is initialized in ```main.rs``` and continuously updated via ```update()``` until a player tops out (game state is ```ToppedOut```).
 
-```on_tick():``` checks for corresponding player with ```uid``` has recently inputted a not processed (in terms of updating the game board) command like: rotate down, ... or no recent or unprocessed action. 
+The logic behind ```update()``` is as follows:
+1. Parse the player's action: if the player's action was a rotation, depending on wallkicks, the current piece's state index (corresponding to an element in its ```Tetronimoes``` states) may change.
+    - If a rotation is successful, we have to increment ```rotations_since_moved_down```. (idk what this is for tbh)
+    - If the action was horizontal movement, then ```current_piece_position``` would be modified.
 
-### in ```/board``` module and board representation:
-row 0 is the floor (0,0 is the bottom left) -> clearing a row would be 0 -> 19 + 2 buffer rows for checking topped out, each row segment contains 10 column cells: occupied or empty
+2. Update the frame count: ```gravity``` represents the number of frames a piece's ```current_piece_position``` (center) will stay at a cell before having to drop down.
+    - If the player's action was ```MoveDown```, then the number of frames before the piece has to drop would be ```gravity = config.gravity - config.gravity_decrease```. This represents soft drop.
+    - For each ```update()``` call, we increment ```frames_since_last_gravity_event``` by 1. If frames > ```gravity``` and the piece will not vertically overlap with occupied board tiles, then increment ```current_piece_position[1]``` by 1 (y-position).
 
-we only need to keep track of the shape of falling pieces: test for collisions of piece w/ floor and settled rows
-when player hard drops or piece collides with non-wall is the orientation of the piece locked -> written to the board
-### piece states: ```TetrisState``` Free -> Falling -> Locked
-1) ```TetrisState::Free```: able to freely rotate (soft drop)
-    - in this state, the tetris piece falls relatively slowly, maybe 1 cell every 3 frames or smth
-2) ```TetrisState::Falling```: still able to rotate, piece falls faster (hard drop)
-    - in this state, the tetris piece will fall in greater gravity, maybe 1 cell every frame
-3) ```TetrisState::Locked```: piece is set, no change in position anymore, converted to and drawn as ```o```s on the board
-    - when drawing ```o```s, check if rows filled on the board
-    - _stretch_: have some fun clearing row animation
-
-also need a function to detect if board topped out, as in overflow -> lose: ```fn topped_out()```: basically check if row 20-21 are occupied after a piece is locked, if yes, lose
-
-clear consecutive full row function: ```fn clear_rows()```:
-board module that stores filled or not filled (union find-esque storage)
-
-don't rly care about the actual shape of the tetris piece after it has been dropped: so for occupied spaces in the board, we can keep track of board segements -> list of horizontal lists:
-keep track of: column indices of a row that are free v. occupied
-this is to detect collisions
-process from bottom to top?
-if the result of a drop causes ```i```th row to be fully occupied, then:
-we have a function called clear row:
-- ```board[0..i]``` + ```board[i+1..]``` + new empty top row
--> however many rows``` are occupied at ```on_tick()``` produces however many garbage rows to the opponent (for multiplayer)
-then we also have a function called add row:
-add a row with 1 missing cell (randomized column)
-
-### piece generation:
-after a piece is LOCKED and the board updated -> generate a new piece:
-randomized generator thingy: ```7-bag``` and ```rand```/```rand_xoshiro```/```Xoshiro128PlusPlus``` algorithm with ```random_seed``` from [config.json](resources/config.json)
-idk what this is specifically, but the readme says to use this particular random num generator
-
-*represent the tetromino by its defined center*
-
-random generator outputs a piece index, which corresponds with a shape from tetrominoes.json, this shape is initalized as some ```Tetris``` piece with ```TetrisState::Free```
-
-### rotation logic:
-for each given [tetrominoes.json](resources/tetrominoes.json) piece, this should be written out in [wall_kicks.json](resources/wall_kicks.json)
-
-rotate by *Super Rotation System (SRS)*
-
-### for incrementing frames
-the number of frames since the current falling piece has been forcefully moved down one row
-- frame increases as the piece has not been moved down one cell yet
-- frame = 0 the instance the cell has moved down to a new cell
-- gravity == max frames before a piece  has to forcibly be moved down to the next row (naturally)
-
-### bounds checking
-check whether any of the 4 cells of a tetromino has exceeded the bounds
-
-## Steps:
-### json and arg parsing:
-tetromino.json, config.json and user's input parsing
-
-### game representation:
-where are all the pieces -> visualizer 
-
-### piece generator:
-7-bag randomizer
-part of the game state, is a seperate module
-
-### handle per-frame sequence step
-once you get the piece, how to compute frames, when rotate and translate
-
-### wall-kicking:
-
+3. A piece is ```locked``` if the player's action was ```HardDrop```, or if a piece cannot vertically move down without overlap and has frames > ```lock_delay```.
+    - In the case of a ```HardDrop```, the piece will vertically drop until it collides with occupied cells.
+    - Once a piece has been ```locked```, we first update the board with the piece's final position.
+    - Then we check whether that piece tops out, or has any corresponding cells occupying rows 20 or 21.
+        - If a piece tops out, immediately return ```ToppedOut``` state and end the game.
+    - If the piece doesn't top out, then check whether its current placement fills up any rows in the board.
+    - Then spawn a new piece with ```PieceGenerator```, which follows 7-bag randomizer. This requires all current piece related information to be reset.
+    
 
 ___
 
@@ -254,20 +198,94 @@ enum Action {
 }
 
 main() {
-    // parse stuff
-    //
-    // let piece_generator = PieceGenerator::new(bag, seed)
-    // make board: let board = Board::new();
-    // let game = Game{
-    //  board: board, piece_generator: 
-    // }
-
+    let (configure, tetrominoes) = json_parser();
+    let game = Game::new(...):
     // thread stuff eventually
-    while not_lose {
-        // game stuff on parsed stuff
-        // board module,
-        // piecegenerator
+    loop {
+        match game.update() {
+            GameState::Playing => {},
+            GameState::ToppedOut => { break; }
+        }
     }
 
     // death
+    Ok(())
 }
+```
+
+___
+## Brainstorming
+### in ```main.rs```:
+the parent thread or main server that launches 1 or 2 child threads for single player or multiplayer, respectively
+spawn threads and then like check on_tick() whether a thread has finished some rows -> garbage given to the other thread
+
+```on_tick():``` checks for corresponding player with ```uid``` has recently inputted a not processed (in terms of updating the game board) command like: rotate down, ... or no recent or unprocessed action. 
+
+### in ```/board``` module and board representation:
+row 0 is the floor (0,0 is the bottom left) -> clearing a row would be 0 -> 19 + 2 buffer rows for checking topped out, each row segment contains 10 column cells: occupied or empty
+
+we only need to keep track of the shape of falling pieces: test for collisions of piece w/ floor and settled rows
+when player hard drops or piece collides with non-wall is the orientation of the piece locked -> written to the board
+### piece states: ```TetrisState``` Free -> Falling -> Locked
+1) ```TetrisState::Free```: able to freely rotate (soft drop)
+    - in this state, the tetris piece falls relatively slowly, maybe 1 cell every 3 frames or smth
+2) ```TetrisState::Falling```: still able to rotate, piece falls faster (hard drop)
+    - in this state, the tetris piece will fall in greater gravity, maybe 1 cell every frame
+3) ```TetrisState::Locked```: piece is set, no change in position anymore, converted to and drawn as ```o```s on the board
+    - when drawing ```o```s, check if rows filled on the board
+    - _stretch_: have some fun clearing row animation
+
+also need a function to detect if board topped out, as in overflow -> lose: ```fn topped_out()```: basically check if row 20-21 are occupied after a piece is locked, if yes, lose
+
+clear consecutive full row function: ```fn clear_rows()```:
+board module that stores filled or not filled (union find-esque storage)
+
+don't rly care about the actual shape of the tetris piece after it has been dropped: so for occupied spaces in the board, we can keep track of board segements -> list of horizontal lists:
+keep track of: column indices of a row that are free v. occupied
+this is to detect collisions
+process from bottom to top?
+if the result of a drop causes ```i```th row to be fully occupied, then:
+we have a function called clear row:
+- ```board[0..i]``` + ```board[i+1..]``` + new empty top row
+-> however many rows``` are occupied at ```on_tick()``` produces however many garbage rows to the opponent (for multiplayer)
+then we also have a function called add row:
+add a row with 1 missing cell (randomized column)
+
+### piece generation:
+after a piece is LOCKED and the board updated -> generate a new piece:
+randomized generator thingy: ```7-bag``` and ```rand```/```rand_xoshiro```/```Xoshiro128PlusPlus``` algorithm with ```random_seed``` from [config.json](resources/config.json)
+idk what this is specifically, but the readme says to use this particular random num generator
+
+*represent the tetromino by its defined center*
+
+random generator outputs a piece index, which corresponds with a shape from tetrominoes.json, this shape is initalized as some ```Tetris``` piece with ```TetrisState::Free```
+
+### rotation logic:
+for each given [tetrominoes.json](resources/tetrominoes.json) piece, this should be written out in [wall_kicks.json](resources/wall_kicks.json)
+
+rotate by *Super Rotation System (SRS)*
+
+### for incrementing frames
+the number of frames since the current falling piece has been forcefully moved down one row
+- frame increases as the piece has not been moved down one cell yet
+- frame = 0 the instance the cell has moved down to a new cell
+- gravity == max frames before a piece  has to forcibly be moved down to the next row (naturally)
+
+### bounds checking
+check whether any of the 4 cells of a tetromino has exceeded the bounds
+
+## Steps:
+### json and arg parsing:
+tetromino.json, config.json and user's input parsing
+
+### game representation:
+where are all the pieces -> visualizer 
+
+### piece generator:
+7-bag randomizer
+part of the game state, is a seperate module
+
+### handle per-frame sequence step
+once you get the piece, how to compute frames, when rotate and translate
+
+### wall-kicking:

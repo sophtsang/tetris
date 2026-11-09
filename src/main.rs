@@ -51,26 +51,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // TODO: make game, run game loop
-    // let piece_generator = PieceGenerator::new(bag, seed);
-    // let board = Board::new();
-    // let game = Game {
-    //      board: board, 
-    //      piece_generator: piece_generator,
-    //      current_piece: piece_generator.cur(),
-    //      current_piece_position: 
+    // TODO: init Game, run game loop
+    let game = Game::new(config, tetrominoes);
 
-    // loop {
-    //      check if frame == 0 then generate piece
-    //      move the piece
-    //      cam: actions: rotations and wall_kick
-    //              figuring out when a piece has finished falling -> turn into cells
-    // 
-    //      sophia: increment frame, check when to generate new piece, 
-    //              implement Board, Game, PieceGenerator
-    //       
-    //      sid: serialize the board
-    // }
+    loop {
+        match game.update() {
+            GameState::Playing => {},
+            GameState::ToppedOut => { break; }
+        }
+    }
 
     Ok(())
 }
