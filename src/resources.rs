@@ -54,6 +54,13 @@ pub enum Tetromino {
     Z,
 }
 
+impl Tetromino {
+    pub const ALL: [Tetromino; 7] = [
+        Tetromino::I, Tetromino::J, Tetromino::L, Tetromino::O,
+        Tetromino::S, Tetromino::T, Tetromino::Z 
+    ];
+}
+
 /// Stores config for each tetromino type.
 #[derive(Debug)]
 pub struct Tetrominoes {

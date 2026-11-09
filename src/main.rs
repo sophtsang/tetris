@@ -7,6 +7,9 @@ use clap::Parser;
 mod action_inputs;
 mod load_resources;
 mod resources;
+mod board;
+mod game;
+mod random;
 
 use action_inputs::parse_action_input;
 use load_resources::load_resources;
@@ -55,17 +58,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     //      board: board, 
     //      piece_generator: piece_generator,
     //      current_piece: piece_generator.cur(),
+    //      current_piece_position: 
 
-    // IN THE LOOP:
+    // loop {
     //      check if frame == 0 then generate piece
     //      move the piece
-    // cam: actions: rotations and wall_kick
-    //       figuring out when a piece has finished falling -> turn into cells
+    //      cam: actions: rotations and wall_kick
+    //              figuring out when a piece has finished falling -> turn into cells
     // 
-    // me: i will increment frame, check when to generate new piece, 
-    //      
-    //
-    // sid: serialize the board
+    //      sophia: increment frame, check when to generate new piece, 
+    //              implement Board, Game, PieceGenerator
+    //       
+    //      sid: serialize the board
     // }
 
     Ok(())
