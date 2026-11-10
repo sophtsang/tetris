@@ -11,8 +11,8 @@ mod load_resources;
 mod random;
 mod resources;
 
-use action_inputs::parse_action_input;
-use game::Game;
+use action_inputs::{Action, parse_action_input};
+use game::{Game, GameState};
 use load_resources::load_resources;
 
 /// Command-line arguments.
@@ -40,17 +40,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         let _actions = parse_action_input(&inputs)?;
     }
 
-    let game = Game::new(config, tetrominoes)?;
+    // Run enough no-action frames for gravity to move the first piece once.
+    let frames = config.gravity.saturating_add(1);
+    let mut game = Game::new(config, tetrominoes)?;
+    for _ in 0..frames {
+        if game.update(Action::None)? == GameState::ToppedOut {
+            break;
+        }
+    }
     println!("{}", game.serialize());
 
-    // TODO: process actions in the game loop.
-
-    // loop {
-    //     match game.update() {
-    //         GameState::Playing => {},
-    //         GameState::ToppedOut => { break; }
-    //     }
-    // }
+    // TODO: process actions from the input file in the game loop.
 
     Ok(())
 }

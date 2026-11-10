@@ -62,18 +62,14 @@ impl Game {
 
     // On every on_tick or frame update, Game updates.
     pub fn update(&mut self, action: Action) -> Result<GameState, String> {
-        // should this be a large match action ? idk maybe
-        // also no idea what wall_kick is so that is taken care of
-        // somewhere here
-
-        // ROTATIONS STUFF: match action maybe?
-        todo!("apply the action on tetromino, 
-               if action was CW -> increment or CCW -> wall_kick + maybe change current_piece_rotation_state_idx
-               to get new tetromino_config.states[idx] = current_piece_rotation");
-
-        todo!("if rotation successful, rotations_since_moved_down += 1");
-
-        todo!("if the action was L or R, modify current_piece_position.x");
+        match action {
+            Action::None | Action::MoveDown => {}
+            Action::RotateClockwise | Action::RotateCounterClockwise => {
+                todo!("apply rotation and wall kicks")
+            }
+            Action::MoveLeft | Action::MoveRight => todo!("move piece horizontally"),
+            Action::HardDrop => todo!("hard drop and lock the piece"),
+        }
 
         let gravity = match action {
             Action::MoveDown => self
@@ -92,15 +88,8 @@ impl Game {
             .board
             .overlaps(down_position, self.board.current_rotation()?);
 
-        let locked = if action == Action::HardDrop {
-            todo!(
-                "if action is HardDrop, directly set current_piece_position.y to the floor
-                (closest vertical occupied cell) and then immediately lock"
-            );
-            true
-        } else {
-            self.frames_since_last_gravity_event > self.config.lock_delay && !can_move_down
-        };
+        let locked =
+            self.frames_since_last_gravity_event > self.config.lock_delay && !can_move_down;
 
         if locked {
             // if LOCKED: as in a piece cannot move down anymore or be rotated
