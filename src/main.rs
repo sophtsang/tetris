@@ -5,15 +5,15 @@ use std::path::PathBuf;
 use clap::Parser;
 
 mod action_inputs;
-mod load_resources;
-mod resources;
 mod board;
 mod game;
+mod load_resources;
 mod random;
+mod resources;
 
 use action_inputs::parse_action_input;
+use game::Game;
 use load_resources::load_resources;
-use resources::Tetromino;
 
 /// Command-line arguments.
 #[derive(Parser, Debug)]
@@ -34,25 +34,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let (config, tetrominoes) = load_resources(&args.resources)?;
 
-    // Debug output to show parsing worked; remove once the game is wired up.
-    println!("{args:#?}");
-    println!("{config:#?}");
-    for t in [Tetromino::I, Tetromino::O, Tetromino::T] {
-        println!("{t:?}: {:?}", tetrominoes.config(t));
-    }
-
     if let Some(path) = &args.simulate_inputs_single_player {
         let inputs = fs::read_to_string(path)
             .map_err(|e| format!("could not read {}: {e}", path.display()))?;
-        println!("inputs from {}:", path.display());
-        let actions = parse_action_input(&inputs)?;
-        for (frame, action) in actions.iter().enumerate() {
-            println!("  frame {frame}: {action:?}");
-        }
+        let _actions = parse_action_input(&inputs)?;
     }
 
-    // TODO: init Game, run game loop
-    let game = Game::new(config, tetrominoes);
+    let game = Game::new(config, tetrominoes)?;
+    println!("{}", game.serialize());
+
+    // TODO: process actions in the game loop.
 
     // loop {
     //     match game.update() {

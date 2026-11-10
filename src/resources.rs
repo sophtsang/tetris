@@ -56,8 +56,13 @@ pub enum Tetromino {
 
 impl Tetromino {
     pub const ALL: [Tetromino; 7] = [
-        Tetromino::I, Tetromino::J, Tetromino::L, Tetromino::O,
-        Tetromino::S, Tetromino::T, Tetromino::Z 
+        Tetromino::I,
+        Tetromino::J,
+        Tetromino::L,
+        Tetromino::O,
+        Tetromino::S,
+        Tetromino::T,
+        Tetromino::Z,
     ];
 }
 
