@@ -30,6 +30,19 @@ impl Board {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_testing(
+        width: usize,
+        height: usize,
+        tetrominoes: Tetrominoes,
+        grid: Vec<u32>,
+    ) -> Self {
+        let mut board = Self::new(width, height, tetrominoes);
+        assert_eq!(grid.len(), board.grid.len());
+        board.grid = grid;
+        board
+    }
+
     /// Spawn a new tetromino if its starting cells do not overlap the board
     /// and there is not already a tetromino.
     pub fn spawn_piece(&mut self, piece: Tetromino) -> Result<(), String> {
@@ -196,5 +209,208 @@ impl Board {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resources::TEST_TETROMINOES;
+
+    fn expect_board(board: &Board, show_current_piece: bool, expected: &str) {
+        let expected = expected
+            .trim()
+            .lines()
+            .map(str::trim)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let actual = board.serialize(show_current_piece);
+        assert!(
+            actual == expected,
+            "board mismatch:\nexpected:\n{expected}\nactual:\n{actual}"
+        );
+    }
+
+    #[test]
+    fn spawning() {
+        let mut board = Board::new(4, 2, TEST_TETROMINOES);
+        expect_board(
+            &board,
+            true,
+            r#"
+            ....
+            ....
+            ....
+            ....
+        "#,
+        );
+
+        board.spawn_piece(Tetromino::O).expect("spawn O piece");
+
+        expect_board(
+            &board,
+            true,
+            r#"
+            .oo.
+            .oo.
+            ....
+            ....
+        "#,
+        );
+    }
+
+    #[test]
+    fn locking() {
+        let mut grid = vec![0; 4 * (2 + BUFFER_SIZE)];
+        grid[0] = 1;
+        let mut board = Board::new_testing(4, 2, TEST_TETROMINOES, grid);
+        expect_board(
+            &board,
+            false,
+            r#"
+            ....
+            ....
+            ....
+            o...
+        "#,
+        );
+
+        board.spawn_piece(Tetromino::O).expect("spawn O piece");
+        board.update_piece([2, 0], 0).expect("move O piece");
+        expect_board(
+            &board,
+            true,
+            r#"
+            ....
+            ....
+            ..oo
+            o.oo
+        "#,
+        );
+        board.lock_piece().expect("lock O piece");
+
+        assert_eq!(board.current_piece, None);
+        expect_board(
+            &board,
+            true,
+            r#"
+            ....
+            ....
+            ..oo
+            o.oo
+        "#,
+        );
+
+        board.spawn_piece(Tetromino::O).expect("spawn next O piece");
+        expect_board(
+            &board,
+            true,
+            r#"
+            .oo.
+            .oo.
+            ..oo
+            o.oo
+        "#,
+        );
+    }
+
+    #[test]
+    fn locking_on_previously_locked_cells_returns_an_error() {
+        let mut board = Board::new(4, 2, TEST_TETROMINOES);
+        board.spawn_piece(Tetromino::O).expect("spawn O piece");
+        board.update_piece([1, 0], 0).expect("move O piece");
+        board.lock_piece().expect("lock first O piece");
+        expect_board(
+            &board,
+            false,
+            r#"
+            ....
+            ....
+            .oo.
+            .oo.
+        "#,
+        );
+
+        board.spawn_piece(Tetromino::O).expect("spawn next O piece");
+        // Force an invalid position.
+        board.current_piece_position = [1, 0];
+        assert_eq!(
+            board.lock_piece().unwrap_err(),
+            "current piece overlaps the board or is out of bounds"
+        );
+        expect_board(
+            &board,
+            false,
+            r#"
+            ....
+            ....
+            .oo.
+            .oo.
+        "#,
+        );
+        assert_eq!(board.current_piece, Some(Tetromino::O));
+    }
+
+    #[test]
+    fn spawning_on_a_locked_buffer_cell_returns_an_error() {
+        let mut grid = vec![0; 4 * (2 + BUFFER_SIZE)];
+        grid[2 * 4 + 1] = 1;
+        let mut board = Board::new_testing(4, 2, TEST_TETROMINOES, grid);
+        expect_board(
+            &board,
+            true,
+            r#"
+            ....
+            .o..
+            ....
+            ....
+        "#,
+        );
+
+        assert_eq!(
+            board.spawn_piece(Tetromino::O).unwrap_err(),
+            "new piece overlaps the board at spawn"
+        );
+        expect_board(
+            &board,
+            true,
+            r#"
+            ....
+            .o..
+            ....
+            ....
+        "#,
+        );
+        assert_eq!(board.current_piece, None);
+    }
+
+    #[test]
+    fn clearing_a_full_row_moves_the_rows_above_down() {
+        let mut grid = vec![0; 4 * (2 + BUFFER_SIZE)];
+        grid[0..4].fill(1);
+        grid[4] = 1;
+        let mut board = Board::new_testing(4, 2, TEST_TETROMINOES, grid);
+
+        expect_board(
+            &board,
+            false,
+            r#"
+            ....
+            ....
+            o...
+            oooo
+        "#,
+        );
+        assert_eq!(board.clear_full_rows(), 1);
+        expect_board(
+            &board,
+            false,
+            r#"
+            ....
+            ....
+            ....
+            o...
+        "#,
+        );
     }
 }

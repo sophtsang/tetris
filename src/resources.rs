@@ -109,3 +109,26 @@ impl Tetrominoes {
         }
     }
 }
+
+#[cfg(test)]
+const TEST_O_CONFIG: TetrominoConfig = TetrominoConfig {
+    states: [[[0, 1], [1, 1], [0, 0], [1, 0]]; 4],
+    wall_kick: Wallkick {
+        o: Vec::new(),
+        r: Vec::new(),
+        t: Vec::new(),
+        l: Vec::new(),
+    },
+};
+
+#[cfg(test)]
+pub(crate) const TEST_TETROMINOES: Tetrominoes = Tetrominoes {
+    // Board tests use O pieces; the other entries are placeholders.
+    i: TEST_O_CONFIG,
+    j: TEST_O_CONFIG,
+    l: TEST_O_CONFIG,
+    o: TEST_O_CONFIG,
+    s: TEST_O_CONFIG,
+    t: TEST_O_CONFIG,
+    z: TEST_O_CONFIG,
+};
