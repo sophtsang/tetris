@@ -69,7 +69,7 @@ impl Game {
             }
             Action::MoveLeft => {
                 self.board.move_current_piece(-1, 0);
-            },
+            }
             Action::MoveRight => {
                 self.board.move_current_piece(1, 0);
             }
