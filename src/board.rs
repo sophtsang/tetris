@@ -241,6 +241,11 @@ impl Board {
         }
     }
 
+    /// Whether there is free space for the current piece to go to [x+dx, y+dy].
+    pub fn can_move(&self, dx: i32, dy: i32) -> bool {
+        self.move_destination(dx, dy).is_some()
+    }
+
     /// Tries to move the current piece to [x+dx, y+dy]. Returns whether the move succeeded.
     pub fn move_current_piece(&mut self, dx: i32, dy: i32) -> bool {
         match self.move_destination(dx, dy) {
