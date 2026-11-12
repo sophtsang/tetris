@@ -118,11 +118,11 @@ impl Game {
         let can_move_down = self.board.can_move(0, -1);
 
         let locked =
-            self.frames_since_last_gravity_event > self.config.lock_delay && !can_move_down;
+            self.frames_since_last_gravity_event >= self.config.lock_delay && !can_move_down;
 
         if locked {
             return self.lock_current_piece();
-        } else if can_move_down && self.frames_since_last_gravity_event > gravity {
+        } else if can_move_down && self.frames_since_last_gravity_event >= gravity {
             // moving current piece is guaranteed to be possible, so no need to check what this returns
             self.board.move_current_piece(0, -1);
             self.frames_since_last_gravity_event = 0;
