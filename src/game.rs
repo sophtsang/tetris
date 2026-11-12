@@ -84,8 +84,15 @@ impl Game {
     pub fn update(&mut self, action: Action) -> Result<GameState, String> {
         match action {
             Action::None | Action::MoveDown => {}
-            Action::RotateClockwise | Action::RotateCounterClockwise => {
-                todo!("apply rotation and wall kicks")
+            Action::RotateClockwise => {
+                if self.board.rotate_current_piece(true) {
+                    self.rotations_since_moved_down += 1
+                }
+            }
+            Action::RotateCounterClockwise => {
+                if self.board.rotate_current_piece(false) {
+                    self.rotations_since_moved_down += 1
+                }
             }
             Action::MoveLeft => {
                 self.board.move_current_piece(-1, 0);
@@ -108,18 +115,14 @@ impl Game {
         };
 
         self.frames_since_last_gravity_event += 1;
-        let down_position = [
-            self.board.current_piece_position[0],
-            self.board.current_piece_position[1] - 1,
-        ];
         let can_move_down = self.board.can_move(0, -1);
 
         let locked =
-            self.frames_since_last_gravity_event > self.config.lock_delay && !can_move_down;
+            self.frames_since_last_gravity_event >= self.config.lock_delay && !can_move_down;
 
         if locked {
             return self.lock_current_piece();
-        } else if can_move_down && self.frames_since_last_gravity_event > gravity {
+        } else if can_move_down && self.frames_since_last_gravity_event >= gravity {
             // moving current piece is guaranteed to be possible, so no need to check what this returns
             self.board.move_current_piece(0, -1);
             self.frames_since_last_gravity_event = 0;
