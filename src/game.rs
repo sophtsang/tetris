@@ -67,7 +67,12 @@ impl Game {
             Action::RotateClockwise | Action::RotateCounterClockwise => {
                 todo!("apply rotation and wall kicks")
             }
-            Action::MoveLeft | Action::MoveRight => todo!("move piece horizontally"),
+            Action::MoveLeft => {
+                self.board.move_current_piece(-1, 0);
+            },
+            Action::MoveRight => {
+                self.board.move_current_piece(1, 0);
+            }
             Action::HardDrop => todo!("hard drop and lock the piece"),
         }
 

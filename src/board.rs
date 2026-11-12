@@ -96,12 +96,20 @@ impl Board {
         false
     }
 
+    /// Get the 4 rotation offsets for `piece` in the config, relative to `rotation_state_idx`
+    fn piece_rotation_offsets(&self, piece: Tetromino, rotation_state_idx: usize) -> [Offset; 4] {
+        self.tetrominoes.config(piece).states[rotation_state_idx]
+    }
+
     /// Return the active piece's cell offsets for its current rotation.
     pub fn current_rotation(&self) -> Result<[Offset; 4], String> {
         self.rotation_at(self.current_piece_rotation_state_idx)
     }
+    
     fn rotation_at(&self, rotation_state_idx: usize) -> Result<[Offset; 4], String> {
         let piece = self.current_piece.ok_or("no current piece")?;
+        // don't use piece_rotation_offsets, since that panics on wrong offset instead of giving a result
+        // TODO: is that okay? not sure why previous writer cared about avoiding panic on this, should talk about
         self.tetrominoes
             .config(piece)
             .states
@@ -209,6 +217,33 @@ impl Board {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Checks if the current piece can move to [x+dx, y+dy] and returns this as an Offset if possible.
+    /// If this is not a valid move, returns None.
+    fn move_destination(&self, dx: i32, dy: i32) -> Option<Offset> {
+        match self.current_piece {
+            None => None, // there is no piece, so there is nothing to move
+            Some(piece) => {
+                let destination = [self.current_piece_position[0] + dx, self.current_piece_position[1] + dy];
+                if self.overlaps(destination, self.piece_rotation_offsets(piece, self.current_piece_rotation_state_idx)) {
+                    None // destination position overlaps with something, cannot move there
+                } else {
+                    Some(destination)
+                }
+            }
+        }
+    }
+
+    /// Tries to move the current piece to [x+dx, y+dy]. Returns whether the move succeeded. 
+    pub fn move_current_piece(&mut self, dx: i32, dy: i32) -> bool {
+        match self.move_destination(dx, dy) {
+            Some(destination) => {
+                self.current_piece_position = destination;
+                true
+            },
+            None => false
+        }
     }
 }
 
