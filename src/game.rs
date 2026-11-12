@@ -60,6 +60,26 @@ impl Game {
         Ok(())
     }
 
+    fn lock_current_piece(&mut self) -> Result<GameState, String> {
+        // if LOCKED: as in a piece cannot move down anymore or be rotated
+        // 0. draw piece on board ->
+        // 1. check if topped out? ->
+        // 2. can clear full rows? ->
+        // 3. generate a new piece
+        let piece_was_in_buffer = self.board.current_piece_in_buffer();
+        self.board.lock_piece()?;
+        if piece_was_in_buffer || self.board.locked_cells_in_buffer() {
+            Ok(GameState::ToppedOut) // return early when lose
+        } else {
+            self.board.clear_full_rows();
+            if self.spawn_new_piece().is_err() {
+                Ok(GameState::ToppedOut)
+            } else {
+                Ok(GameState::Playing)
+            }
+        }
+    }
+
     // On every on_tick or frame update, Game updates.
     pub fn update(&mut self, action: Action) -> Result<GameState, String> {
         match action {
@@ -67,8 +87,16 @@ impl Game {
             Action::RotateClockwise | Action::RotateCounterClockwise => {
                 todo!("apply rotation and wall kicks")
             }
-            Action::MoveLeft | Action::MoveRight => todo!("move piece horizontally"),
-            Action::HardDrop => todo!("hard drop and lock the piece"),
+            Action::MoveLeft => {
+                self.board.move_current_piece(-1, 0);
+            }
+            Action::MoveRight => {
+                self.board.move_current_piece(1, 0);
+            }
+            Action::HardDrop => {
+                while self.board.move_current_piece(0, -1) {}
+                return self.lock_current_piece();
+            }
         }
 
         let gravity = match action {
@@ -84,34 +112,16 @@ impl Game {
             self.board.current_piece_position[0],
             self.board.current_piece_position[1] - 1,
         ];
-        let can_move_down = !self
-            .board
-            .overlaps(down_position, self.board.current_rotation()?);
+        let can_move_down = self.board.can_move(0, -1);
 
         let locked =
             self.frames_since_last_gravity_event > self.config.lock_delay && !can_move_down;
 
         if locked {
-            // if LOCKED: as in a piece cannot move down anymore or be rotated
-            // 0. draw piece on board ->
-            // 1. check if topped out? ->
-            // 2. can clear full rows? ->
-            // 3. generate a new piece
-            let piece_was_in_buffer = self.board.current_piece_in_buffer();
-            self.board.lock_piece()?;
-            if piece_was_in_buffer || self.board.locked_cells_in_buffer() {
-                return Ok(GameState::ToppedOut); // return early when lose
-            } else {
-                self.board.clear_full_rows();
-
-                if self.spawn_new_piece().is_err() {
-                    return Ok(GameState::ToppedOut);
-                }
-            }
+            return self.lock_current_piece();
         } else if can_move_down && self.frames_since_last_gravity_event > gravity {
-            // guaranteed that move down 1 cell, so no vertical collisions
-            self.board
-                .update_piece(down_position, self.board.current_piece_rotation_state_idx)?;
+            // moving current piece is guaranteed to be possible, so no need to check what this returns
+            self.board.move_current_piece(0, -1);
             self.frames_since_last_gravity_event = 0;
             self.rotations_since_moved_down = 0;
         };
