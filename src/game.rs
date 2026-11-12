@@ -61,23 +61,23 @@ impl Game {
     }
 
     fn lock_current_piece(&mut self) -> Result<GameState, String> {
-            // if LOCKED: as in a piece cannot move down anymore or be rotated
-            // 0. draw piece on board ->
-            // 1. check if topped out? ->
-            // 2. can clear full rows? ->
-            // 3. generate a new piece
-            let piece_was_in_buffer = self.board.current_piece_in_buffer();
-            self.board.lock_piece()?;
-            if piece_was_in_buffer || self.board.locked_cells_in_buffer() {
-                Ok(GameState::ToppedOut) // return early when lose
+        // if LOCKED: as in a piece cannot move down anymore or be rotated
+        // 0. draw piece on board ->
+        // 1. check if topped out? ->
+        // 2. can clear full rows? ->
+        // 3. generate a new piece
+        let piece_was_in_buffer = self.board.current_piece_in_buffer();
+        self.board.lock_piece()?;
+        if piece_was_in_buffer || self.board.locked_cells_in_buffer() {
+            Ok(GameState::ToppedOut) // return early when lose
+        } else {
+            self.board.clear_full_rows();
+            if self.spawn_new_piece().is_err() {
+                Ok(GameState::ToppedOut)
             } else {
-                self.board.clear_full_rows();
-                if self.spawn_new_piece().is_err() {
-                    Ok(GameState::ToppedOut)
-                } else {
-                    Ok(GameState::Playing)
-                }
+                Ok(GameState::Playing)
             }
+        }
     }
 
     // On every on_tick or frame update, Game updates.
@@ -94,9 +94,9 @@ impl Game {
                 self.board.move_current_piece(1, 0);
             }
             Action::HardDrop => {
-                while self.board.move_current_piece(0, -1) {};
+                while self.board.move_current_piece(0, -1) {}
                 return self.lock_current_piece();
-            },
+            }
         }
 
         let gravity = match action {
