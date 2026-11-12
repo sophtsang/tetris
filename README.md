@@ -11,6 +11,25 @@
 - Clarify requirement for larger groups.
 - Fix part 2 setup to actually work with an autograder.
 
+2026-11-08:
+- Fix tests to match README and fix runt command to use p5_tetris as binary.
+- Fix mistake in README in hard drop section, if any cell is above row 20, top
+  out, not all
+
+2026-11-09
+- Fix error in writeup, blocks should fall when greater than or equal to lock
+  delay or gravity, not when greater than.
+- Change required groups to strongly encouraged groups.
+- Specify more precise requirements for bag randomizer so it actually matches
+  the staff solution's randomizer.
+- Fix T piece being a Z piece
+- Add part 3 writeup
+
+2026-11-10
+- Fix incorrect test, topped-out.txt. The staff solution continued to draw
+  new pieces to the board despite the user topping out.
+- Clean up design doc section formatting.
+
 ## Introduction
 For project 5 and project 6 you will be implementing a networked Tetris game.
 If you've never played Tetris against other people try it out! It's a fun game
@@ -45,9 +64,10 @@ and the most robust teams may receive a small amount of extra credit on this or
 next assignment. So, try to write efficient code whenever possible.
 
 ### Submission and Logistics
-You must *work in groups of 3-4*. Please form groups on gradescope and submit
-together for both the checkpoint and final submission. You should have the same
-groups throughout this and next project as they will build on each other.
+We strongly encourage you to *work in groups of 3-4*. Please form groups on
+gradescope and submit together for both the checkpoint and final submission. You
+should have the same groups throughout this and next project as they will build
+on each other.
 
 You will submit your project using `cargo package` as previously. Your project
 when built should create a binary. We will specify the behavior of that binary
@@ -62,6 +82,15 @@ specify what you need to put in this below as well.
 (1) will be due Nov 11 as a check-in.
 (2), (3), and (4) will be due Nov 18 and will possibly contain edits to your work
 submitted for (1).
+
+### AI Policy
+As a reminder, you must not use LLMs to generate any part of your submission,
+including code, comments, or writing in your design doc. Asking an LLM how to
+implement something and using that as inspiration violates this policy.
+
+We discourage, but begrudgingly allow the use of LLMs for seeking out
+documentation or descriptions of high level concepts. Though, please seek 
+official docs or reach out to a TA through OH or Ed first!
 
 ## Part 1: Single Player Tetris
 You will implement a binary which simulates a game of Tetris given a list of
@@ -192,11 +221,12 @@ randomly without replacement. When the bag is empty, those 7 pieces are placed
 back into the bag and drawing continues.
 
 When implementing your randomizer, you *must use the
-[rand](https://docs.rs/rand/latest/rand/) and
-[rand_xoshiro](https://docs.rs/rand_xoshiro/latest/rand_xoshiro/) crates with
-the random seed from `config.json` and the `Xoshiro128PlusPlus` algorithm.*
-We provide an implementation matching the staff solution below. Please use it
-to be sure you pass tests:
+[rand](https://docs.rs/rand/latest/rand/) version 0.10.3 and
+[rand_xoshiro](https://docs.rs/rand_xoshiro/latest/rand_xoshiro/) version 0.8.1
+crates with the random seed from `config.json` and the `Xoshiro128PlusPlus`
+algorithm.* We provide an implementation matching the staff solution below.
+When creating the bag randomizer, pass an iterator ordering the tetrominoes i,
+j, l, o, s, t, z, the same they appear in the JSON:
 ```rs
 type RngAlgorithm = Xoshiro128PlusPlus;
 
@@ -272,11 +302,11 @@ On each frame, the game will:
 2. Perform an action based on the read input.
 3. Increment the number of frames since a piece has forcefully moved down a
   row.
-  - If this number if greater than the gravity and the piece can be moved down
-    a row, move the piece down a row.
-  - If this number is greater than the pieces *lock delay*, the number of
-    frames before a piece locks into place, fill the cells currently taken up
-    by the piece.
+  - If this number if greater than or equal to the gravity and the piece can be
+    moved down a row, move the piece down a row.
+  - If this number is greater than or equal to the pieces *lock delay*, the
+    number of frames before a piece locks into place, fill the cells currently
+    taken up by the piece.
   - If any cell of this piece are above row 20, stop reading inputs and
     advancing the game state. The player "topped out" and lost.
 4. If any rows are composed entirely of filled with cells, remove the row and
@@ -361,7 +391,7 @@ config file. This makes the block fall faster.
 
 A hard drop instantly moves a piece downwards until that piece cannot move down
 a row without one of its cells overlapping a fill cell or being below row 0. It
-then locks the piece in place. If all of the cells of th piece are above row
+then locks the piece in place. If any of the cells of the piece are above row
 20, stop reading inputs and stop updating game state. The player topped out!
 
 There is also a [wiki page on this](https://tetris.wiki/Drop) which is useful to
@@ -380,9 +410,9 @@ the unit 1/G for gravity.
   the game board, and game itself, which calls functions provided by the game
   board.
 - Implement board serialization as soon as possible. This will allow you to
-  test features as you implement them.
+  test features as you implement them with provided integration tests.
 - Implement input format parsing so you can do end to end testing as soon as
-  possible.
+  possible with provided integration tests.
 - Write unit or integration tests for your code as you implement new features.
 - When locking a piece in place, remember to reset the counter tracking time
   since a piece has moved down a row due to gravity.
@@ -391,7 +421,7 @@ the unit 1/G for gravity.
 ### Setup
 For this part, you will implement a bot to play single player Tetris. First,
 for grading reasons you should create the following enums, structs, and trait
-as follows to module `bot`:
+as follows to module `bot` in a file `src/bot.rs`:
 ```rs
 pub enum TetrominoType {
     I, J, L, O, S, Z, T
@@ -411,13 +441,10 @@ pub struct BoardState {
     pub tetromino_col: usize,
     pub tetromino_rotation: usize,
     pub tetromino: TetrominoType,
-
     pub board: [[CellState; 10]; 20],
-    pub garbage_lines: [Option<usize>; 20],
-    pub ticks_till_garbage: u64,
 }
 
-pub trait Bot {
+pub trait SinglePlayerBot {
     /// Create a new bot.
     fn new() -> Self;
 
@@ -426,27 +453,23 @@ pub trait Bot {
     fn get_move(&mut self, board_state: &BoardState) -> TetrisAction;
 }
 ```
-We will explain the fields to do with garbage in Part 3, feel free to ignore it
-for now.
 
 Now, add the following unit test to `tests.rs` in your `tests` directory where
 `SinglePlayerBot` is your bot struct implementing `Bot`. It should compile.
 ```rs
 use p5_tetris::bot::{BoardState, Bot, CellState, TetrominoType};
 
-pub type SinglePlayerBot = /* TODO: Replace this comment with your bot! */;
+pub type MySinglePlayerBot = /* TODO: Replace this comment with your bot! */;
 
 #[test]
 fn create_bot_and_get_any_action_test() {
-    let mut bot = SinglePlayerBot::new();
+    let mut bot = MySinglePlayerBot::new();
     let _ = bot.get_move(&BoardState {
         tetromino_row: 20,
         tetromino_col: 4,
         tetromino_rotation: 0,
         tetromino: TetrominoType::J,
         board: [[CellState::Empty; 10]; 20],
-        garbage_lines: [None; 20],
-        ticks_till_garbage: 0,
     });
 }
 ```
@@ -532,8 +555,205 @@ may not conform super well to the description above. One popular library for
 parallel programming in rust is [rayon](https://github.com/rayon-rs/rayon).
 Feel free to use or ignore it (or other) creates.
 
-## Part 3
-Currently being worked on, should be out soon.
+## Part 3: Multiplayer Tetris
+Tetris can be made multiplayer by giving each player their own board. Whenever
+a player clears multiple lines, one less than that number of lines is sent to
+the other player as garbage. In this part, you will first augment your simulator
+to handle multiple players and then use your simulator to have multiple bots
+compete with each other.
+
+You will add a new flag to your simulator called
+`--simulate-inputs-multi-player` which takes a list of input files and outputs
+the board of each player. As an example with both `p1-inputs.txt` and
+`p2-inputs.txt` identical, the command outputs the following:
+```
+$ cargo run -- --resources resources --simulate-inputs-multi-player p1-inputs.txt --simulate-inputs-multi-player p2-inputs.txt
+...o......    ...o......
+...ooo....    ...ooo....
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+..........    ..........
+......o...    ......o...
+.....oo...    .....oo...
+o....oo.o.    o....oo.o.
+ooooooo.oo    ooooooo.oo
+oo...o..o.    oo...o..o.
+ooooooooo.    ooooooooo.
+ooooooooo.    ooooooooo.
+ooooooooo.    ooooooooo.
+ooooooooo.    ooooooooo.
+```
+### Input Format
+The input format is identical to Part 1.
+
+### Output Format
+The output format is very similar to Part 1. Each player's board is drawn side
+by side, deliminated by four spaces. Player 1, passed to the binary as the first
+input file is drawn first, then player 2 drawn second. Board should be truncated
+to 22 lines if garbage were to make them taller (see next section).
+
+### Multiplayer Tetris Behavior and Garbage
+The simulator now keeps track of two boards at the same time. Simulation per
+board progresses as in single player Tetris until a player clears one or
+multiple lines on a given tick. When this happens "garbage," a row with one cell
+omitted, is sent to the other player. If multiple lines of garbage are sent on
+the same tick, each row will have a cell in the same column removed.
+
+Sent garbage can "cancel out" pending garbage sent from the other player.
+Garbage not used to cancel other garbage is is added to a garbage queue and
+tagged with the amount of time until they are added to the other player's board.
+
+The sequence occurs after a game tick and is as follows:
+1. Say player 1 has g1 lines of garbage in their queue, and player 2 has g2
+  lines of garbage in their queue.
+2. Additionally, say player 1 clears l1 lines and player 2 clears l2 lines.
+3. Let s1 = max(l1 - 1, 0), s2 = max(l2 - 1, 0)
+4. Player 2's queue gets max(s1 - g1, 0) new pieces of garbage tagged with timer
+  "garbage_queue_time" from `config.json` and the oldest min(s1, g1) pieces of
+  pending garbage, not including newly added garbage this tick, is removed.
+5. Player 1's queue gets max(s2 - g1, 0) new pieces of garbage tagged with timer
+  "garbage_queue_time" from `config.json` and the oldest min(s2, g2) pieces of
+  pending garbage, not including the newly added garbage this tick, is removed.
+6. All garbage in each player's queue tagged with timer equal to 0 has that
+  garbage removed from the queue and applied to the bottom that player's board,
+  moving all other rows upwards.
+7. For a player, if any cell is above at or above the 20th row (row index >=
+  20), that player tops out. No further garbage should be applied to topped out
+  players.
+8. All garbage timers are reduced by 1.
+
+Note: when representing garbage, we can omit the actual missing column when
+storing garbage, instead computing it on the fly when it is applied to the game
+board.
+
+In order for you solution to match with the staff solution and pasts tests you
+must use a `Xoshiro128PlusPlus` per game board, using one call to `.next_u32()`
+for an aligned block of garbage and only calling calling to the randomizer when
+"on the fly" when garbage is actually added to the game board, once per block of
+aligned garbage. The randomizers should be seeded with the random seed from
+`config.json`.
+
+### Multiplayer Tetris Bots
+Multiplayer bots look similar to single player bots but take in the board state
+of both players as well as the garbage state of both players. Thus, they require
+a new interface. Add the following to your `bots` module (in `bot.rs`):
+```rs
+pub struct GarbageLine {
+    pub num_rows_to_create: usize,
+    pub ticks_till_applied: usize,
+}
+
+pub trait MultiPlayerBot {
+    /// Create a new bot.
+    fn new() -> Self;
+
+    /// Gets an action to perform based on the board state. This should be called
+    /// every frame.
+    fn get_move(
+        &mut self,
+        p1_state: &BoardState,
+        p1_garbage: &[GarbageLine],
+        p2_state: &BoardState,
+        p2_garbage: &[GarbageLine],
+    ) -> TetrisAction;
+}
+```
+
+And to facilitate grading, add the following to `tests.rs`
+```rs
+use p5_tetris::bot::MultiPlayerBot;
+
+pub type MyMultiPlayerBot = /* TODO: Replace this comment with your bot! */;
+
+#[test]
+fn create_mut_bot_and_get_any_action_test() {
+    let mut bot = MyMultiPlayerBot::new();
+    let state = &BoardState {
+        tetromino_row: 20,
+        tetromino_col: 4,
+        tetromino_rotation: 0,
+        tetromino: TetrominoType::J,
+        board: [[CellState::Empty; 10]; 20],
+    };
+    let _ = bot.get_move(&state, &[], &state, &[]);
+}
+```
+
+### Connecting Bots to the Server
+We now want you to create a harness to allow two bots to play each other. This
+involves adding the following flags to your binary:
+- `--list-bots`: print a newline separated list of implemented bots
+- `--trace-bot-run <bot1> <bot1-tracefile> <bot2> <bot2-tracefile>`: print the
+  board state after `<bot1>` or `<bot2>` tops out in the output format described
+  above. Write `<bot1>`'s inputs to `<bot1-tracefile>` in the input format
+  described above and write `<bot2>`'s inputs to `<bot2-tracefile>` in the input
+  format described above.
+
+As an example
+```
+$ cargo run -- --list-bots
+good-bot
+bad-bot
+$ cargo run -- --trace-bot-run good-bot t1.txt bad-bot t2.txt
+...o......    ...o......
+...ooo....    .ooooooo..
+..........    ...oooooo.
+..........    ....oo....
+..........    ....oo....
+..........    ....oo....
+..........    ...oo.....
+..........    ....oo....
+..........    ...oo.....
+..........    ...o......
+..........    ...ooo....
+..........    ....oo....
+..........    ...oo.....
+......o...    ...oo.....
+.....oo...    ...ooo....
+o....oo.o.    ...ooo....
+ooooooo.oo    ...oooo...
+oo...o..o.    ....oo....
+ooooooooo.    ....oo....
+ooooooooo.    ....oo....
+ooooooooo.    ...ooo....
+ooooooooo.    ...ooo....
+$ ls
+t1.txt t2.txt
+$ cat t2.txt
+HHHHHHHHHHHHLLHRRRH
+```
+
+You should implement at least two bots, one named `good-bot` which should
+hopefully play pretty well and one named `bad-bot` which can play however bad
+you want. `good-bot` should be able to reliably beat `bad-bot`.
+
+You can run a sanity check for implementing the harness correctly by simulating
+an run using the created traces using `--simulate-inputs-multi-player` and
+verifying the final board states are the same.
+
+### Requirements for Part 3
+We will test Part 3 as follows:
+1. Verifying `--simulate-inputs-multi-player` agrees with our staff solution on
+  various input traces
+2. Running your harness pitting `good-bot` against `bad-bot` and verifying your
+  program generates a valid trace and `good-bot` wins.
+3. Running the bot you assign to `MyMultiPlayerBot` and verifying it returns a
+  move in less than 1/60th of a second on the google cloud servers (e.g. it
+  returns a move every frame).
+
+The 1/60th of a second time limit creates a tradeoff. You don't have to make a
+meaningful move every frame (e.g. you can return E), so bots which "think" in a
+separate thread for multiple frames to find better moves may do better than bots
+which choose poor moves quickly, though bots which move quickly can overwhelm
+bots which are too slow.
 
 ## Integration Testing
 We use [runt](https://github.com/rachitnigam/runt) for integration tests. You
@@ -549,25 +769,30 @@ lines), Markdown, or PDF file. You should list the name and netids of all
 students who contributed to your project on this document.
 
 Your document should include the following sections
-1. Architecture: Describe the modules you wrote and any important structs or
-  traits. Describe how they interact and any invariants you maintain between
-  them.
-2. Implementation: Describe any interesting algorithms you use or otherwise
-  creative or non-obvious implementation decisions. Explain where you expect
-  there may be performance bottlenecks in your code and how you identified
-  these spots. In particular, what was your bot's algorithm? If you read
-  anything which inspired it, please cite it (just a link and brief description
-  of how you used the resource is fine).
-3. Testing: Describe how you tested your design and what parts of your project
-  did you devote more or less verification effort towards.
-  verification effort towards.
+1. Architecture:
+  - Describe the modules you wrote and any important structs or traits.
+  - Describe how they interact and any invariants you maintain between them.
+2. Implementation:
+  - Describe any interesting algorithms you use or otherwise creative or
+    non-obvious implementation decisions.
+  - Explain where your code has performance bottlenecks and how you identified them.
+    Profile your code to support your argument.
+  - What was your bot's algorithm? If you read anything which inspired it,
+    please cite it (just a link and brief description of what you used from the
+    resource is fine).
+3. Testing:
+  - Describe how you tested your design.
+  - What parts of your project did you devote more or less verification effort
+    towards?
 4. Work Credit: If you worked in a group, say who did what.
 5. Known Issues: If there is something you know doesn't work, describe it here.
-6. Meta Comments: Write any opinions on the assignment. Some things we are
+6. AI Usage: If you used any AI tools describe how you used them. We are curious
+  how you use the tools, especially given the limiting AI policy.
+7. Meta Comments: Write any opinions on the assignment. Some things we are
   curious about are:
-  - how long did you spend on the assignment, which parts took the longest?
-  - what did you like and dislike about the assignment, why?
-  - is there anything you'd like to change about the assignment?
+  - How long did you spend on the assignment, which parts took the longest?
+  - What did you like and dislike about the assignment, why?
+  - Is there anything you'd like to change about the assignment?
 
 Acknowledgement: The requirements for this document are loosely based off of the
 requirements for the design document required by CS 4120's assignments.

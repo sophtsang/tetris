@@ -5,4 +5,9 @@ name = "Runt Tests"
 [[tests]]
 name = "Single Player Tests"
 paths = ["single-player/*.txt"]
-cmd = "../target/release/tetris --simulate-inputs-single-player {} --resources ../resources"
+cmd = "../target/release/p5_tetris --simulate-inputs-single-player {} --resources ../resources"
+
+[[tests]]
+name = "Multi Player Tests"
+paths = ["multi-player/*.txt"]
+cmd = "head -n1 {} > p1.txt && tail -n1 {} > p2.txt && ../target/release/p5_tetris --resources ../resources --simulate-inputs-multi-player p1.txt --simulate-inputs-multi-player p2.txt && rm p1.txt && rm p2.txt"
