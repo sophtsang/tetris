@@ -1,5 +1,6 @@
 /target
-
+/cli-tests/p1.txt
+/cli-tests/p2.txt
 
 # Added by cargo
 #
