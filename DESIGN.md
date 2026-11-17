@@ -54,6 +54,7 @@ The logic behind ```update()``` is as follows:
     - Then we check whether that piece tops out, or has any corresponding cells occupying rows 20 or 21.
         - If a piece tops out, immediately return ```ToppedOut``` state and end the game.
     - If the piece doesn't top out, then check whether its current placement fills up any rows in the board.
+        - ```Game::update``` will return the state ```Playing{ row_cleared }```, which notifies other boards how many rows the current player has cleared. This allows for updated garbage generation.
     - Then spawn a new piece with ```PieceGenerator```, which follows 7-bag randomizer. This requires all current piece related information to be reset.
     
 
@@ -203,7 +204,7 @@ main() {
     // thread stuff eventually
     loop {
         match game.update() {
-            GameState::Playing => {},
+            GameState::Playing{ rows_cleared } => {},
             GameState::ToppedOut => { break; }
         }
     }
@@ -289,3 +290,10 @@ part of the game state, is a seperate module
 once you get the piece, how to compute frames, when rotate and translate
 
 ### wall-kicking:
+
+### garbage: UPDAT THIES
+Garbage logic is contained within the ```Garbage``` struct and impl in ```multiplayer.rs```, due to the fact that an update to garbage requires information from both players. Unfortunately, this means that ```update()``` to a player's garbage state must be called outside of their own ```Game``` object, in ```main.rs```, where the game loop runs.
+
+In multiplayer, if a player has topped out, the remaining players will continue playing.
+
+A new random column is generated  per Garbage with timer = 0.

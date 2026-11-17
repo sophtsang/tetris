@@ -6,7 +6,7 @@ use std::error::Error;
 use serde::Deserialize;
 
 /// Game config, parsed from `config.json`.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Copy)]
 pub struct Config {
     /// Dimensions of game board.
     pub width: u32,
@@ -18,6 +18,8 @@ pub struct Config {
     pub lock_delay: u32,
     /// Random seed for next piece generation.
     pub random_seed: [u8; 16],
+    /// Frames before sent garbage is applied to the other player's board.
+    pub garbage_queue_time: u32,
 }
 
 /// (x, y) offset.
@@ -37,7 +39,7 @@ pub struct Wallkick {
 }
 
 /// A tetromino's rotation states and its wall kicks config.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TetrominoConfig {
     pub states: [[Offset; 4]; 4],
     pub wall_kick: Wallkick,
@@ -67,7 +69,7 @@ impl Tetromino {
 }
 
 /// Stores config for each tetromino type.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tetrominoes {
     i: TetrominoConfig,
     j: TetrominoConfig,
