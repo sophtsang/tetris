@@ -10,7 +10,7 @@ pub trait SinglePlayerBot {
 
     /// Gets an action to perform based on the board state. This should be called
     /// every frame.
-    fn get_move(&mut self) -> Action;
+    fn get_move(&self) -> Action;
 
     /// Updates the current bot state assuming the player plays a given action.
     /// If the bot is playing, this will likely be the result of
@@ -20,48 +20,50 @@ pub trait SinglePlayerBot {
 
 pub struct MySinglePlayerBot {
     game: Game,
-    best_seq: Option<Vec<Action>>,
 }
 
+const DISCOUNT_FACTOR: f64 = 0.95;
+const HOLE_COST: f64 = 10.0;
+const FLATNESS_COST: f64 = 1.0;
+const HEIGHT_COST: f64 = 1.0;
+
 impl MySinglePlayerBot {
-    fn reward(game_state: &GameState, before_bottom_row: i32, game_after_action: &Game) -> i32 {
+    fn reward(game_state: &GameState, depth: u32, game_after_action: &Game) -> f64 {
+        let discount = DISCOUNT_FACTOR.powi(depth as i32);
+
         match game_state {
             GameState::Locked { rows_cleared } => {
-                (*rows_cleared as i32) * 100 + before_bottom_row
-                    - game_after_action
-                        .last_locked_bottom_row()
-                        .expect("locked game must record the piece's bottom row")
+                let board = &game_after_action.board;
+                let board_cost = HOLE_COST * board.hole_count() as f64
+                    + FLATNESS_COST * board.flatness_cost() as f64
+                    + HEIGHT_COST * board.highest_filled_row().unwrap_or(0) as f64;
+                discount * (*rows_cleared as f64 * 100.0) - board_cost
             }
-            GameState::Playing => {
-                before_bottom_row
-                    - game_after_action
-                        .distance_to_board_bottom()
-                        .expect("playing game must have an active piece")
-            }
-            GameState::ToppedOut => -1000,
+            GameState::Playing => 0.0,
+            GameState::ToppedOut => -1000.0,
         }
     }
 
-    fn tree_search(remaining_layers: u32, game: Game) -> Option<(Vec<Action>, i32)> {
+    fn tree_search(remaining_layers: u32, game: Game) -> Option<(Vec<Action>, f64)> {
         let mut best_seq = None;
-        let before_bottom_row = game
-            .distance_to_board_bottom()
-            .expect("tree search requires an active piece");
 
         for action in [
+            Action::HardDrop,
             Action::MoveLeft,
             Action::MoveRight,
             Action::RotateClockwise,
             Action::RotateCounterClockwise,
             Action::MoveDown,
-            Action::HardDrop,
             Action::None,
         ] {
             let mut game_after_action = game.clone();
 
             if let Ok(game_state) = game_after_action.update(action) {
-                let move_reward =
-                    MySinglePlayerBot::reward(&game_state, before_bottom_row, &game_after_action);
+                let move_reward = MySinglePlayerBot::reward(
+                    &game_state,
+                    6 - remaining_layers,
+                    &game_after_action,
+                );
 
                 if game_state == GameState::Playing && remaining_layers > 0 {
                     let optimal_continuation =
@@ -102,7 +104,6 @@ impl SinglePlayerBot for MySinglePlayerBot {
 
         Self {
             game: Game::new(config, tetrominoes).unwrap(),
-            best_seq: None,
         }
 
         // for action in actions {
@@ -112,19 +113,16 @@ impl SinglePlayerBot for MySinglePlayerBot {
         // }
     }
 
-    fn get_move(&mut self) -> Action {
-        if self.best_seq.as_ref().is_none_or(Vec::is_empty) {
-            let best = MySinglePlayerBot::tree_search(6, self.game.clone());
+    fn get_move(&self) -> Action {
+        let best = MySinglePlayerBot::tree_search(5, self.game.clone());
 
-            if let Some((best_moves, _)) = best {
-                self.best_seq = Some(best_moves);
-            }
+        if let Some((best_moves, _)) = best {
+            println!("{:?}", best_moves);
+
+            best_moves.last().unwrap_or(&Action::None).clone()
+        } else {
+            Action::None
         }
-
-        self.best_seq
-            .as_mut()
-            .and_then(Vec::pop)
-            .unwrap_or(Action::None)
     }
 
     fn update_with(&mut self, action: Action) {
