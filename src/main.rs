@@ -4,18 +4,19 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-mod action_inputs;
-mod board;
-mod game;
-mod load_resources;
-mod random;
-mod resources;
-mod multiplayer;
+pub mod action_inputs;
+pub mod board;
+pub mod bot;
+pub mod game;
+pub mod load_resources;
+pub mod multiplayer;
+pub mod random;
+pub mod resources;
 
 use action_inputs::{Action, parse_action_input};
 use game::{Game, GameState};
-use multiplayer::GameLog;
 use load_resources::load_resources;
+use multiplayer::GameLog;
 use resources::{Config, Tetrominoes};
 
 /// Command-line arguments.
@@ -37,9 +38,13 @@ struct Args {
     resources: PathBuf,
 }
 
-fn run_single_player(path: &Path, config: Config, tetrominoes: Tetrominoes) -> Result<(), Box<dyn Error>> {
-    let inputs = fs::read_to_string(path)
-        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+fn run_single_player(
+    path: &Path,
+    config: Config,
+    tetrominoes: Tetrominoes,
+) -> Result<(), Box<dyn Error>> {
+    let inputs =
+        fs::read_to_string(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
     let actions = parse_action_input(&inputs)?; // dyn Error cuz who knows what error panic ? could be
 
     let mut game = Game::new(config, tetrominoes)?;
@@ -54,12 +59,16 @@ fn run_single_player(path: &Path, config: Config, tetrominoes: Tetrominoes) -> R
 
 /// Reads and parses one input file into a list of per-frame actions.
 fn read_actions(path: &Path) -> Result<Vec<Action>, Box<dyn Error>> {
-    let inputs = fs::read_to_string(path)
-        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    let inputs =
+        fs::read_to_string(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
     Ok(parse_action_input(&inputs)?)
 }
 
-fn run_multi_player(paths: &[PathBuf], config: Config, tetrominoes: Tetrominoes) -> Result<(), Box<dyn Error>> {
+fn run_multi_player(
+    paths: &[PathBuf],
+    config: Config,
+    tetrominoes: Tetrominoes,
+) -> Result<(), Box<dyn Error>> {
     let mut game_log = GameLog::new(config, paths.len());
     let mut games = Vec::new();
     let mut actions = Vec::new();
@@ -67,20 +76,32 @@ fn run_multi_player(paths: &[PathBuf], config: Config, tetrominoes: Tetrominoes)
         games.push(Game::new(config, tetrominoes.clone())?);
         actions.push(read_actions(path)?);
     }
-    let frames = actions.iter()
-        .map(|player_actions| player_actions.len()).max().unwrap_or(0);
+    let frames = actions
+        .iter()
+        .map(|player_actions| player_actions.len())
+        .max()
+        .unwrap_or(0);
 
     for frame in 0..frames {
-        if game_log.game_states.iter().all(|&b| b == GameState::ToppedOut ) {  // are we all topped out
+        if game_log
+            .game_states
+            .iter()
+            .all(|&b| b == GameState::ToppedOut)
+        {
+            // are we all topped out
             break;
         }
         for player in 0..paths.len() {
             // games[idx].garbage().update(cleared: usize, opp_num_rows_to_create: usize, opp_cleared: usize) -> Option<{num_garbage: usize, empty_col: usize}>
-            if let Some(action) = actions[player].get(frame) && game_log.game_states[player] != GameState::ToppedOut {
+            if let Some(action) = actions[player].get(frame)
+                && game_log.game_states[player] != GameState::ToppedOut
+            {
                 match games[player].update(*action)? {
                     GameState::ToppedOut => game_log.topped_out(player), // kill the person
-                    GameState::Playing => {},
-                    GameState::Locked{ rows_cleared } => game_log.update_cleared(player, rows_cleared)
+                    GameState::Playing => {}
+                    GameState::Locked { rows_cleared } => {
+                        game_log.update_cleared(player, rows_cleared)
+                    }
                 }
             }
         }
@@ -102,8 +123,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(path) = &args.simulate_inputs_single_player {
         run_single_player(path, config, tetrominoes)?;
-    }
-    else if !args.simulate_inputs_multi_player.is_empty() {
+    } else if !args.simulate_inputs_multi_player.is_empty() {
         run_multi_player(&args.simulate_inputs_multi_player, config, tetrominoes)?;
     }
 

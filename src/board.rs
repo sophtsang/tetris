@@ -2,6 +2,7 @@ use crate::resources::{Offset, Tetromino, Tetrominoes};
 
 const BUFFER_SIZE: usize = 2;
 
+#[derive(Clone, Debug)]
 pub struct Board {
     grid: Vec<u32>,
     pub width: usize,
@@ -185,7 +186,8 @@ impl Board {
             valid = false;
         }
         // move up 0 -> end to start -> self.height
-        self.grid.copy_within(0..(row_count * self.width) - start, start); 
+        self.grid
+            .copy_within(0..(row_count * self.width) - start, start);
 
         self.grid[0..start].fill(1);
         for row in 0..num_rows_to_create {
@@ -285,11 +287,24 @@ impl Board {
             None => false,
             Some(piece) => {
                 let config = self.tetrominoes.config(piece);
-                let target_rotation = (self.current_piece_rotation_state_idx + if clockwise { 1 } else { 4 - 1 }) % 4; // +1 if clockwise, -1 if ccw (4-1 to avoid overflow)
+                let target_rotation =
+                    (self.current_piece_rotation_state_idx + if clockwise { 1 } else { 4 - 1 }) % 4; // +1 if clockwise, -1 if ccw (4-1 to avoid overflow)
                 let target_rotation_states = config.states[target_rotation];
-                let wallkick_table = [&config.wall_kick.o, &config.wall_kick.r, &config.wall_kick.t, &config.wall_kick.l];
+                let wallkick_table = [
+                    &config.wall_kick.o,
+                    &config.wall_kick.r,
+                    &config.wall_kick.t,
+                    &config.wall_kick.l,
+                ];
                 for i in 0..wallkick_table[self.current_piece_rotation_state_idx].len() {
-                    let destination = [self.current_piece_position[0] + wallkick_table[self.current_piece_rotation_state_idx][i][0] - wallkick_table[target_rotation][i][0], self.current_piece_position[1] + wallkick_table[self.current_piece_rotation_state_idx][i][1] - wallkick_table[target_rotation][i][1]];
+                    let destination = [
+                        self.current_piece_position[0]
+                            + wallkick_table[self.current_piece_rotation_state_idx][i][0]
+                            - wallkick_table[target_rotation][i][0],
+                        self.current_piece_position[1]
+                            + wallkick_table[self.current_piece_rotation_state_idx][i][1]
+                            - wallkick_table[target_rotation][i][1],
+                    ];
                     if !self.overlaps(destination, target_rotation_states) {
                         self.current_piece_position = destination;
                         self.current_piece_rotation_state_idx = target_rotation;

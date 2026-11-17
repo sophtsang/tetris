@@ -3,13 +3,14 @@ use crate::board::Board;
 use crate::random::PieceGenerator;
 use crate::resources::{Config, Tetromino, Tetrominoes};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameState {
-    Locked{ rows_cleared: usize }, // a piece is locked
+    Locked { rows_cleared: usize }, // a piece is locked
     Playing,
     ToppedOut,
 }
 
+#[derive(Clone, Debug)]
 pub struct Game {
     board: Board,
     config: Config,
@@ -18,6 +19,7 @@ pub struct Game {
     // down a cell
     frames_since_last_gravity_event: u32,
     rotations_since_moved_down: u32,
+    last_locked_bottom_row: Option<i32>,
 }
 
 impl Game {
@@ -33,12 +35,30 @@ impl Game {
             piece_generator: piece_generator,
             frames_since_last_gravity_event: 0,
             rotations_since_moved_down: 0,
+            last_locked_bottom_row: None,
         })
     }
 
     /// Show the board with its current falling piece.
     pub fn serialize(&self) -> String {
         self.board.serialize(true)
+    }
+
+    /// Whether the active piece has room to move down one cell.
+    pub fn can_move_down(&self) -> bool {
+        self.board.can_move(0, -1)
+    }
+
+    /// Row of the active piece's lowest cell, measured from the board's bottom row (0).
+    pub fn distance_to_board_bottom(&self) -> Option<i32> {
+        let offsets = self.board.current_rotation().ok()?;
+        let lowest_offset = offsets.iter().map(|offset| offset[1]).min()?;
+        Some(self.board.current_piece_position[1] + lowest_offset)
+    }
+
+    /// Bottom row reached by the most recently locked piece.
+    pub fn last_locked_bottom_row(&self) -> Option<i32> {
+        self.last_locked_bottom_row
     }
 
     // called when a new piece is spawned
@@ -57,7 +77,9 @@ impl Game {
         // 2. can clear full rows? ->
         // 3. generate a new piece
         let piece_was_in_buffer = self.board.current_piece_in_buffer();
+        let bottom_row = self.distance_to_board_bottom();
         self.board.lock_piece()?;
+        self.last_locked_bottom_row = bottom_row;
         if piece_was_in_buffer || self.board.locked_cells_in_buffer() {
             Ok(GameState::ToppedOut) // return early when lose
         } else {
@@ -65,15 +87,21 @@ impl Game {
             if self.spawn_new_piece().is_err() {
                 Ok(GameState::ToppedOut)
             } else {
-                Ok(GameState::Locked{ rows_cleared: rows_cleared })
+                Ok(GameState::Locked {
+                    rows_cleared: rows_cleared,
+                })
             }
         }
     }
 
-    pub fn generate_garbage(&mut self, num_rows_to_create: usize, empty_col: usize) -> Result<GameState, String> {
+    pub fn generate_garbage(
+        &mut self,
+        num_rows_to_create: usize,
+        empty_col: usize,
+    ) -> Result<GameState, String> {
         match self.board.generate_garbage(num_rows_to_create, empty_col) {
             true => Ok(GameState::Playing),
-            false => Ok(GameState::ToppedOut)
+            false => Ok(GameState::ToppedOut),
         }
     }
 
