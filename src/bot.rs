@@ -1,6 +1,7 @@
 use crate::action_inputs::Action;
 use crate::game::{Game, GameState};
 use crate::load_resources::load_resources;
+use crate::multiplayer::GameLog;
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
 
@@ -67,8 +68,14 @@ pub trait MultiPlayerBot {
     /// Updates the bot after every player's action in a frame.
     fn update_with(&mut self, p_actions: &[TetrisAction]);
 }
+
 pub struct PlacementBot {
     game: Game,
+}
+
+pub struct MultiplayerPlacementBot {
+    games: [Game; 2],
+    log: GameLog,
 }
 
 const HOLE_COST: f64 = 20.0;
@@ -94,8 +101,8 @@ impl PlacementBot {
     /// Find the best landing among positions reachable by left/right moves and
     /// rotations at the piece's current height. The queue also gives a shortest
     /// sequence of inputs to each setup position.
-    fn best_drop(&self) -> Option<(Vec<Action>, f64)> {
-        let start = self.game.board.clone();
+    fn best_drop(game: &Game) -> Option<(Vec<Action>, f64)> {
+        let start = game.board.clone();
         start.current_piece?;
         let start_y = start.current_piece_position[1];
         let mut queue = VecDeque::from([(start.clone(), Vec::<Action>::new())]);
@@ -106,7 +113,7 @@ impl PlacementBot {
         let mut best: Option<(Vec<Action>, f64)> = None;
 
         while let Some((board, path)) = queue.pop_front() {
-            let mut dropped = self.game.clone();
+            let mut dropped = game.clone();
             dropped.board = board.clone();
             if let Ok(state) = dropped.update(Action::HardDrop) {
                 let score = Self::landing_reward(state, &dropped);
@@ -148,6 +155,18 @@ impl PlacementBot {
 
         best
     }
+
+    fn move_for(game: &Game, print_plan: bool) -> TetrisAction {
+        if let Some((mut path, _)) = Self::best_drop(game) {
+            path.push(Action::HardDrop);
+            if print_plan {
+                println!("{path:?}");
+            }
+            path[0].into()
+        } else {
+            TetrisAction::E
+        }
+    }
 }
 
 impl SinglePlayerBot for PlacementBot {
@@ -159,16 +178,53 @@ impl SinglePlayerBot for PlacementBot {
     }
 
     fn get_move(&self) -> TetrisAction {
-        if let Some((mut path, _)) = self.best_drop() {
-            path.push(Action::HardDrop);
-            println!("{path:?}");
-            path[0].into()
-        } else {
-            TetrisAction::E
-        }
+        Self::move_for(&self.game, true)
     }
 
     fn update_with(&mut self, action: TetrisAction) {
         self.game.update(action.into()).expect("Failed to update.");
+    }
+}
+
+impl MultiPlayerBot for MultiplayerPlacementBot {
+    fn new(config: &Path) -> Self {
+        let (config, tetrominoes) = load_resources(config).unwrap();
+        let games = [
+            Game::new(config, tetrominoes.clone()).unwrap(),
+            Game::new(config, tetrominoes).unwrap(),
+        ];
+        Self {
+            games,
+            log: GameLog::new(config, 2),
+        }
+    }
+
+    fn get_move(&self) -> TetrisAction {
+        if self.log.game_states[0] == GameState::ToppedOut {
+            TetrisAction::E
+        } else {
+            PlacementBot::move_for(&self.games[0], false)
+        }
+    }
+
+    fn update_with(&mut self, p_actions: &[TetrisAction]) {
+        assert_eq!(p_actions.len(), 2, "expected one action per player");
+
+        for (player, action) in p_actions.iter().enumerate() {
+            if self.log.game_states[player] == GameState::ToppedOut {
+                continue;
+            }
+            match self.games[player]
+                .update((*action).into())
+                .expect("Failed to update.")
+            {
+                GameState::Playing => {}
+                GameState::ToppedOut => self.log.topped_out(player),
+                GameState::Locked { rows_cleared } => self.log.update_cleared(player, rows_cleared),
+            }
+        }
+        self.log
+            .update(&mut self.games)
+            .expect("Failed to update garbage.");
     }
 }
