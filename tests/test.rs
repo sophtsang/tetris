@@ -26,7 +26,7 @@ fn bot_clears_40_lines() {
     for frame in 1..=MAX_FRAMES {
         let action = bot.get_move();
         let state = game
-            .update(action)
+            .update(action.into())
             .expect("game failed to process bot action");
 
         if let GameState::Locked { rows_cleared } = state {

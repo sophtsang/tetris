@@ -4,8 +4,46 @@ use crate::load_resources::load_resources;
 
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
-use std::thread::sleep;
-use std::time::Duration;
+
+/// Input symbols required by the bot interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TetrisAction {
+    C,
+    W,
+    L,
+    R,
+    D,
+    H,
+    E,
+}
+
+impl From<TetrisAction> for Action {
+    fn from(action: TetrisAction) -> Self {
+        match action {
+            TetrisAction::C => Action::RotateClockwise,
+            TetrisAction::W => Action::RotateCounterClockwise,
+            TetrisAction::L => Action::MoveLeft,
+            TetrisAction::R => Action::MoveRight,
+            TetrisAction::D => Action::MoveDown,
+            TetrisAction::H => Action::HardDrop,
+            TetrisAction::E => Action::None,
+        }
+    }
+}
+
+impl From<Action> for TetrisAction {
+    fn from(action: Action) -> Self {
+        match action {
+            Action::RotateClockwise => TetrisAction::C,
+            Action::RotateCounterClockwise => TetrisAction::W,
+            Action::MoveLeft => TetrisAction::L,
+            Action::MoveRight => TetrisAction::R,
+            Action::MoveDown => TetrisAction::D,
+            Action::HardDrop => TetrisAction::H,
+            Action::None => TetrisAction::E,
+        }
+    }
+}
 
 pub trait SinglePlayerBot {
     /// Create a new bot given the path to the resources dir.
@@ -13,10 +51,22 @@ pub trait SinglePlayerBot {
 
     /// Gets an action to perform based on the board state. This should be called
     /// every frame.
-    fn get_move(&self) -> Action;
+    fn get_move(&self) -> TetrisAction;
 
     /// Updates the current bot state assuming the player plays a given action.
-    fn update_with(&mut self, action: Action);
+    fn update_with(&mut self, action: TetrisAction);
+}
+
+pub trait MultiPlayerBot {
+    /// Create a new bot given the path to the resources dir.
+    fn new(config: &Path) -> Self;
+
+    /// Gets an action to perform based on the board state. This should be called
+    /// every frame.
+    fn get_move(&self) -> TetrisAction;
+
+    /// Updates the bot after every player's action in a frame.
+    fn update_with(&mut self, p_actions: &[TetrisAction]);
 }
 
 pub struct MySinglePlayerBot {
@@ -110,18 +160,17 @@ impl SinglePlayerBot for MySinglePlayerBot {
         }
     }
 
-    fn get_move(&self) -> Action {
+    fn get_move(&self) -> TetrisAction {
         if let Some((mut path, _)) = self.best_drop() {
             path.push(Action::HardDrop);
             println!("{path:?}");
-            path[0]
+            path[0].into()
         } else {
-            Action::None
+            TetrisAction::E
         }
     }
 
-    fn update_with(&mut self, action: Action) {
-        // sleep(Duration::from_millis(100));
-        self.game.update(action).expect("Failed to update.");
+    fn update_with(&mut self, action: TetrisAction) {
+        self.game.update(action.into()).expect("Failed to update.");
     }
 }
