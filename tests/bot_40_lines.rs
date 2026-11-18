@@ -6,8 +6,8 @@ use p5_tetris::load_resources::load_resources;
 
 #[test]
 fn bot_clears_40_lines() {
-    const TARGET_LINES: usize = 40000;
-    const MAX_FRAMES: usize = 20_000_000;
+    const TARGET_LINES: usize = 40;
+    const MAX_FRAMES: usize = 20_000;
 
     let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
     let (config, tetrominoes) = load_resources(&resources).unwrap();
