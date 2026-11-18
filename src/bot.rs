@@ -23,22 +23,20 @@ pub struct MySinglePlayerBot {
     game: Game,
 }
 
-const DISCOUNT_FACTOR: f64 = 0.95;
 const HOLE_COST: f64 = 20.0;
 const FLATNESS_COST: f64 = 1.0;
 const HEIGHT_COST: f64 = 1.0;
 const LINE_CLEAR_REWARD: f64 = 100.0;
 
 impl MySinglePlayerBot {
-    fn landing_reward(state: GameState, game: &Game, moves_to_target: usize) -> f64 {
+    fn landing_reward(state: GameState, game: &Game) -> f64 {
         match state {
             GameState::Locked { rows_cleared } => {
                 let board = &game.board;
                 let board_cost = HOLE_COST * board.hole_count() as f64
                     + FLATNESS_COST * board.flatness_cost() as f64
                     + HEIGHT_COST * board.highest_filled_row().unwrap_or(0) as f64;
-                let discount = DISCOUNT_FACTOR.powi(moves_to_target as i32);
-                discount * (rows_cleared as f64 * LINE_CLEAR_REWARD) - board_cost
+                (rows_cleared as f64 * LINE_CLEAR_REWARD) - board_cost
             }
             GameState::ToppedOut => -1000.0,
             GameState::Playing => unreachable!("hard drop always locks the piece"),
@@ -63,7 +61,7 @@ impl MySinglePlayerBot {
             let mut dropped = self.game.clone();
             dropped.board = board.clone();
             if let Ok(state) = dropped.update(Action::HardDrop) {
-                let score = Self::landing_reward(state, &dropped, path.len());
+                let score = Self::landing_reward(state, &dropped);
                 if best.as_ref().is_none_or(|(best_path, best_score)| {
                     score > *best_score || (score == *best_score && path.len() < best_path.len())
                 }) {
@@ -123,7 +121,7 @@ impl SinglePlayerBot for MySinglePlayerBot {
     }
 
     fn update_with(&mut self, action: Action) {
-        sleep(Duration::from_millis(250));
+        sleep(Duration::from_millis(100));
         self.game.update(action).expect("Failed to update.");
     }
 }
