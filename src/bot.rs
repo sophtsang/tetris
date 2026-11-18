@@ -121,7 +121,7 @@ impl SinglePlayerBot for MySinglePlayerBot {
     }
 
     fn update_with(&mut self, action: Action) {
-        sleep(Duration::from_millis(100));
+        // sleep(Duration::from_millis(100));
         self.game.update(action).expect("Failed to update.");
     }
 }
