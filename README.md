@@ -83,15 +83,6 @@ specify what you need to put in this below as well.
 (2), (3), and (4) will be due Nov 18 and will possibly contain edits to your work
 submitted for (1).
 
-### AI Policy
-As a reminder, you must not use LLMs to generate any part of your submission,
-including code, comments, or writing in your design doc. Asking an LLM how to
-implement something and using that as inspiration violates this policy.
-
-We discourage, but begrudgingly allow the use of LLMs for seeking out
-documentation or descriptions of high level concepts. Though, please seek 
-official docs or reach out to a TA through OH or Ed first!
-
 ## Part 1: Single Player Tetris
 You will implement a binary which simulates a game of Tetris given a list of
 inputs describing what a player's action on every frame of gameplay.
@@ -619,10 +610,10 @@ The sequence occurs after a game tick and is as follows:
 4. Player 2's queue gets max(s1 - g1, 0) new pieces of garbage tagged with timer
   "garbage_queue_time" from `config.json` and the oldest min(s1, g1) pieces of
   pending garbage, not including newly added garbage this tick, is removed.
-5. Player 1's queue gets max(s2 - g1, 0) new pieces of garbage tagged with timer
+5. Player 1's queue gets max(s2 - g2, 0) new pieces of garbage tagged with timer
   "garbage_queue_time" from `config.json` and the oldest min(s2, g2) pieces of
   pending garbage, not including the newly added garbage this tick, is removed.
-6. All garbage in each player's queue tagged with timer equal to 0 has that
+6. Check if a given player had a piece lock this turn, if so: all garbage in each player's queue tagged with timer equal to 0 has that
   garbage removed from the queue and applied to the bottom that player's board,
   moving all other rows upwards.
 7. For a player, if any cell is above at or above the 20th row (row index >=
@@ -786,9 +777,7 @@ Your document should include the following sections
     towards?
 4. Work Credit: If you worked in a group, say who did what.
 5. Known Issues: If there is something you know doesn't work, describe it here.
-6. AI Usage: If you used any AI tools describe how you used them. We are curious
-  how you use the tools, especially given the limiting AI policy.
-7. Meta Comments: Write any opinions on the assignment. Some things we are
+6. Meta Comments: Write any opinions on the assignment. Some things we are
   curious about are:
   - How long did you spend on the assignment, which parts took the longest?
   - What did you like and dislike about the assignment, why?

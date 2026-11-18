@@ -173,6 +173,27 @@ impl Board {
         Ok(())
     }
 
+    // generate garbage rows
+    pub fn generate_garbage(&mut self, num_rows_to_create: usize, empty_col: usize) -> bool {
+        let row_count = self.height + BUFFER_SIZE;
+        // as in the lowest portion of the grid that could possibly intersect with BUFFER
+        let mut valid = true;
+        let end = self.height.saturating_sub(num_rows_to_create) * self.width;
+        let start = num_rows_to_create * self.width; // where row 0 will be moved up to
+
+        if !self.grid[end..].iter().all(|&cell| cell == 0) {
+            valid = false;
+        }
+        // move up 0 -> end to start -> self.height
+        self.grid.copy_within(0..(row_count * self.width) - start, start); 
+
+        self.grid[0..start].fill(1);
+        for row in 0..num_rows_to_create {
+            self.grid[row * self.width + empty_col] = 0;
+        }
+        valid // success
+    }
+
     /// Remove full rows and shift all rows above them down.
     pub fn clear_full_rows(&mut self) -> usize {
         let mut next_row = 0;

@@ -3,8 +3,9 @@ use crate::board::Board;
 use crate::random::PieceGenerator;
 use crate::resources::{Config, Tetromino, Tetrominoes};
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum GameState {
+    Locked{ rows_cleared: usize }, // a piece is locked
     Playing,
     ToppedOut,
 }
@@ -19,26 +20,15 @@ pub struct Game {
     rotations_since_moved_down: u32,
 }
 
-// pub struct Config {
-//     /// Dimensions of game board.
-//     pub width: u32,
-//     pub height: u32,
-//     /// Rate at which piece drops on board.
-//     pub gravity: u32,
-//     pub gravity_decrease: u32,
-//     /// Once this many frames pass without dropping, lock the piece.
-//     pub lock_delay: u32,
-//     /// Random seed for next piece generation.
-//     pub random_seed: [u8; 16],
-// }
 impl Game {
+    // game log will also be updated outside of this game instance
     pub fn new(config: Config, tetrominoes: Tetrominoes) -> Result<Self, String> {
         let piece_generator = PieceGenerator::new(Tetromino::ALL, config.random_seed);
         let tetromino = *piece_generator.cur();
         let mut board = Board::new(config.width as usize, config.height as usize, tetrominoes);
         board.spawn_piece(tetromino)?;
         Ok(Self {
-            board,
+            board: board,
             config: config,
             piece_generator: piece_generator,
             frames_since_last_gravity_event: 0,
@@ -71,12 +61,19 @@ impl Game {
         if piece_was_in_buffer || self.board.locked_cells_in_buffer() {
             Ok(GameState::ToppedOut) // return early when lose
         } else {
-            self.board.clear_full_rows();
+            let rows_cleared = self.board.clear_full_rows();
             if self.spawn_new_piece().is_err() {
                 Ok(GameState::ToppedOut)
             } else {
-                Ok(GameState::Playing)
+                Ok(GameState::Locked{ rows_cleared: rows_cleared })
             }
+        }
+    }
+
+    pub fn generate_garbage(&mut self, num_rows_to_create: usize, empty_col: usize) -> Result<GameState, String> {
+        match self.board.generate_garbage(num_rows_to_create, empty_col) {
+            true => Ok(GameState::Playing),
+            false => Ok(GameState::ToppedOut)
         }
     }
 
