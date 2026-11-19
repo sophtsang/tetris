@@ -61,7 +61,7 @@ pub trait SinglePlayerBot {
 
 pub trait MultiPlayerBot {
     /// Create a new bot given the path to the resources dir.
-    fn new(config: &Path) -> Self;
+    fn new(config: &Path) -> Self where Self: Sized;
 
     /// Gets an action to perform based on the board state. This should be called
     /// every frame.

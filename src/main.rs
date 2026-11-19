@@ -1,5 +1,6 @@
 use std::error::Error;
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
@@ -17,6 +18,7 @@ use action_inputs::{Action, parse_action_input};
 use game::{Game, GameState};
 use load_resources::load_resources;
 use multiplayer::GameLog;
+use bot::{BadBot, MultiPlayerBot, MultiplayerPlacementBot};
 use resources::{Config, Tetrominoes};
 
 /// Command-line arguments.
@@ -40,6 +42,26 @@ struct Args {
     /// Print the list of available bots
     #[arg(long)]
     list_bots: bool,
+
+    /// Runs both specified bots and makes them play against each other until one wins
+    #[arg(long, requires_all = ["p1", "o1", "p2", "o2"])]
+    trace_bot_run: bool,
+
+    /// bot1 name
+    #[arg(long)]
+    p1: Option<String>,
+
+    /// bot1 trace output file
+    #[arg(long)]
+    o1: Option<PathBuf>,
+
+    /// bot2 name
+    #[arg(long)]
+    p2: Option<String>,
+
+    /// bot2 trace output file
+    #[arg(long)]
+    o2: Option<PathBuf>,
 }
 
 /// Prints the list of available bots.
@@ -131,6 +153,16 @@ fn run_multi_player(
     Ok(())
 }
 
+/// Gets a bot from its corresponding name. 
+/// TODO: real error type if we ever get around to caring
+fn bot_from_name(bot_name: &str, config: &Path) -> Result<Box<dyn MultiPlayerBot>, String> {
+    match bot_name {
+        "good-bot" => Ok(Box::new(MultiplayerPlacementBot::new(config))),
+        "bad-bot" => Ok(Box::new(<BadBot as MultiPlayerBot>::new(config))),
+        other_name => Err(format!("{other_name} is not a valid bot type"))
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let (config, tetrominoes) = load_resources(&args.resources)?;
@@ -141,6 +173,38 @@ fn main() -> Result<(), Box<dyn Error>> {
         run_single_player(path, config, tetrominoes)?;
     } else if !args.simulate_inputs_multi_player.is_empty() {
         run_multi_player(&args.simulate_inputs_multi_player, config, tetrominoes)?;
+    } else if args.trace_bot_run {
+        let mut bots = [bot_from_name(&args.p1.unwrap(), &args.resources)?, bot_from_name(&args.p2.unwrap(), &args.resources)?];
+        // write as we go
+        let mut trace_files = [BufWriter::new(File::create(args.o1.as_ref().unwrap())?),BufWriter::new(File::create(args.o2.as_ref().unwrap())?)];
+        let mut game_log = GameLog::new(config, 2);
+        let mut games = vec![ Game::new(config, tetrominoes.clone())?,  Game::new(config, tetrominoes.clone())?];
+
+        while !game_log.game_states.contains(&GameState::ToppedOut) {
+            let moves = [bots[0].get_move(), bots[1].get_move()];
+            
+            for player in 0..2 {
+                let move_string = format!("{:?}", moves[player]);
+                trace_files[player].write_all(move_string.as_bytes())?;
+                match games[player].update(moves[player].into())? {
+                    GameState::ToppedOut => game_log.topped_out(player), // kill the person
+                    GameState::Playing => {}
+                    GameState::Locked { rows_cleared } => {
+                        game_log.update_cleared(player, rows_cleared)
+                    }
+                }
+            }
+            game_log.update(&mut games)?;
+            for player in 0..2 {
+                bots[player].update_with(&[moves[player], moves[(player+1)%2]]);
+            }
+        }
+        // print both boards side by side, row by row, separated by four spaces
+        let p1_board = games[0].serialize();
+        let p2_board = games[1].serialize();
+        for (p1_row, p2_row) in p1_board.lines().zip(p2_board.lines()) {
+            println!("{p1_row}    {p2_row}");
+        }
     }
     Ok(())
 }
