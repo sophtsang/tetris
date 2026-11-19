@@ -145,7 +145,7 @@ Checks that the single- and multiplayer Tetris bots implementations matched the 
 
 ## 4. Reflection
 ### Work Credits
-**Cam**: Worked on action inputs, wall kicks, and piece movements in the board. Created the harness for allowing two bots to play each other.
+**Cam**: Implemented Actions in `board.rs` and `game.rs` (movement, dropping, piece locking, wall kicks/rotation). Implemented the `--trace-bot-run` harness and corresponding CLI flags.
 
 **Utku**: Implemented single and multiplayer Tetris bots in ```bot.rs```.
 
