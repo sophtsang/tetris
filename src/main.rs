@@ -36,6 +36,20 @@ struct Args {
     ///     tetrominoes.json
     #[arg(long, default_value = "resources")]
     resources: PathBuf,
+
+    /// Print the list of available bots
+    #[arg(long)]
+    list_bots: bool,
+}
+
+/// Prints the list of available bots.
+fn list_bots() {
+    // this is not kept in sync automatically with the actual bots we have
+    // but tbh that would be overengineered for what we need
+    let bots = ["good-bot", "bad-bot"];
+    for bot in bots {
+        println!("{bot}");
+    }
 }
 
 fn run_single_player(
@@ -121,11 +135,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let (config, tetrominoes) = load_resources(&args.resources)?;
 
-    if let Some(path) = &args.simulate_inputs_single_player {
+    if args.list_bots {
+        list_bots();
+    } else if let Some(path) = &args.simulate_inputs_single_player {
         run_single_player(path, config, tetrominoes)?;
     } else if !args.simulate_inputs_multi_player.is_empty() {
         run_multi_player(&args.simulate_inputs_multi_player, config, tetrominoes)?;
     }
-
     Ok(())
 }
