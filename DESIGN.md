@@ -62,7 +62,11 @@ We define the ```Board``` struct to contain a flattened representation of the ga
 The ```random``` module contains logic for generating a new piece. We define a ```PieceGenerator``` struct that represents a bag randomizer of the 7 ```Tetromino``` variants. The ```Xoshiro128PlusPlus``` algorithm is used as the random number generator along with a random seed provided by ```config.json```. ```PieceGenerator``` models the 7-bag random generator that Tetris uses, and guarantees that all 7 possible tetromino pieces are able to be eventually drawn.
     
 ### [```bot```](src/bot.rs)
-The ```bot``` module defines the required ```SinglePlayerBot``` and ```MultiPlayerBot``` traits and the ```TetrisAction``` enum, which converts to and from our ```Action```. ```PlacementBot``` (single player) and ```MultiplayerPlacementBot``` (multiplayer) are the good bot: each keeps its own copy of the game(s) in sync through ```update_with()``` and returns the next step of its current ```plan``` from ```get_move()```. ```BadBot``` implements both traits and always hard drops. The harness in ```main``` looks up bots by name (```good-bot```, ```bad-bot```) and only talks to them through ```MultiPlayerBot```.
+The ```bot``` module encapsulates good and bad Tetris bot logic and functionality.
+
+ We define the required ```SinglePlayerBot``` and ```MultiPlayerBot``` traits and the ```TetrisAction``` enum, which converts to and from our ```Action``` inputs. The ```PlacementBot``` and ```MultiplayerPlacementBot``` structs represent the good single- and multiplayer Tetris bots. Each bot keeps its own copy of the game in sync through ```update_with()``` and returns the next step of its current ```plan``` from ```get_move()```. 
+
+The ```BadBot``` struct represents the bad Tetris bot, which will always hard drop a piece. The harness in ```main``` looks up bots by name (```good-bot```, ```bad-bot```) and only talks to them through ```MultiPlayerBot```.
 
 ### [```multiplayer```](src/multiplayer.rs)
 The ```multiplayer``` module encapsulates logic and stores information that must be shared between ```Game``` instances during mulitplayer Tetris. This module also contains implementation of the garbage mechanic.
@@ -80,6 +84,18 @@ The ```load_resources``` module contains logic for parsing simulated game files 
 
 ## 2. Implementation: 
 ### Actions and Wall-Kicks
+`action_inputs.rs` contains an enum `Action` with a descriptively-named variant for each type of action, as well as a function `parse_action_input` that takes an input string and attempts to parse it into a vector of `Action`s. 
+
+On every frame, the game reads the player's next action. The action then both moves the current piece (or not, depending on the action) and updates the number of frames in the game state to track gravity.
+
+By designing the `board.rs/move_current_piece` function to succeed even if the piece on the board does not actually move upon acting (e.g. when it is against a wall), we can simply call this function every time a movement action occurs.
+
+#### Wall-Kicks
+
+Since it is not guaranteed for the kick table configuration file to exist, we load the kick table first as a `RawTetrominoConfig`, then convert it into a `TetrominoConfig` containing the wall kick table if the file can be loaded successfully. 
+
+To actually perform a wall kick, the function `rotate_current_piece` iterates through the stored kick table in order. For each wall kick, it calculates the resulting location; if there are no overlaps between the existing board and the piece's new location, it chooses that wall kick.
+
 
 ### Tetris Bot
 The bad bot is represented by the ```BadBot``` struct and will hard drop every piece. The expected behavior is that the bad bot should top out very fast.
@@ -107,6 +123,16 @@ The good bot is represented by the ```PlacementBot``` and ```MultiplayerPlacemen
 
 
 ### Harness
+
+The harnesses for multiplayer play and bot play follow similar procedures:
+
+- Wait for a move from all (both) players
+- Write a trace file for the corresponding player with the move
+- Apply the move to the player's respective `Game` and update its `GameLog`
+- Tell each player the other players' moves
+
+For each player there exists a copy of the game state from the point of view of that player.
+
 
 ### Garbage 
 One ```Garbage``` instance represents a block of aligned garbage that takes up ```num_rows_to_create``` rows in the player's board. We use a queue to track of a player's accumulated blocks of garbage in order of its age. The implementation details of garbage removal is as follows:
@@ -168,5 +194,9 @@ Checks that the single- and multiplayer Tetris bots implementations matched the 
 **Xueqing**: Worked on outlining the single- and multiplayer game loops in ```main.rs```. Implemented the multiplayer Tetris garbage mechanic in ```multiplayer.rs```. 
 ___ 
 ### Meta Comments
+AI was used miniminally amongst members and only to verify overall Tetris architecture and mechanics.
+
+There were no known issues in the assignment beyond some outdated CLI tests. 
+
 Each member spent around 10-15 hrs on the entire assignment, with implementation of the good bot, multiplayer Tetris garbage mechanic, and harness taking the longest.
 ___ 
