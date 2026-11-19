@@ -71,6 +71,34 @@ pub trait MultiPlayerBot {
     fn update_with(&mut self, p_actions: &[TetrisAction]);
 }
 
+/// bad bot related implementations 
+pub struct BadBot;
+
+impl SinglePlayerBot for BadBot {
+    fn new(config: &Path) -> Self {
+        BadBot
+    }
+
+    fn get_move(&self) -> TetrisAction {
+        TetrisAction::H
+    }
+
+    fn update_with(&mut self, _action: TetrisAction) {}
+}
+
+impl MultiPlayerBot for BadBot {
+    fn new(config: &Path) -> Self {
+        BadBot
+    }
+
+    fn get_move(&self) -> TetrisAction {
+        TetrisAction::H
+    }
+
+    fn update_with(&mut self, _p_actions: &[TetrisAction]) {}
+}
+
+/// good bot related implementations 
 pub struct PlacementBot {
     game: Game,
     plan: RefCell<VecDeque<Action>>,
