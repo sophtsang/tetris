@@ -2,8 +2,6 @@
 **Members**: Cam Mazzacane (clm357), Utku Melemetci (um44), Sidharth Rao (smr353), Xueqing Tsang (xt73)
 
 ## 1. Architecture: 
-_TODO: Describe the modules you wrote and any important structs or traits. Describe how they interact and any invariants you maintain between them._
-
 ### Invariants
 1) Once a player's game state is ```ToppedOut```, their board is frozen and their future actions do not update the game. In multiplayer Tetris, other players continue to play as normal.
 2) Board updates only occur if a player's piece is locked. Updates to ```board``` include checking whether the player has topped out, clearing out rows, and generating garbage. 
@@ -64,7 +62,7 @@ We define the ```Board``` struct to contain a flattened representation of the ga
 The ```random``` module contains logic for generating a new piece. We define a ```PieceGenerator``` struct that represents a bag randomizer of the 7 ```Tetromino``` variants. The ```Xoshiro128PlusPlus``` algorithm is used as the random number generator along with a random seed provided by ```config.json```. ```PieceGenerator``` models the 7-bag random generator that Tetris uses, and guarantees that all 7 possible tetromino pieces are able to be eventually drawn.
     
 ### [```bot```](src/bot.rs)
-The ```bot``` module _TODO: i have no clue_.
+The ```bot``` module defines the required ```SinglePlayerBot``` and ```MultiPlayerBot``` traits and the ```TetrisAction``` enum, which converts to and from our ```Action```. ```PlacementBot``` (single player) and ```MultiplayerPlacementBot``` (multiplayer) are the good bot: each keeps its own copy of the game(s) in sync through ```update_with()``` and returns the next step of its current ```plan``` from ```get_move()```. ```BadBot``` implements both traits and always hard drops. The harness in ```main``` looks up bots by name (```good-bot```, ```bad-bot```) and only talks to them through ```MultiPlayerBot```.
 
 ### [```multiplayer```](src/multiplayer.rs)
 The ```multiplayer``` module encapsulates logic and stores information that must be shared between ```Game``` instances during mulitplayer Tetris. This module also contains implementation of the garbage mechanic.
@@ -81,16 +79,32 @@ The ```load_resources``` module contains logic for parsing simulated game files 
 
 
 ## 2. Implementation: 
-_TODO: Describe any interesting algorithms you use or otherwise creative or non-obvious implementation decisions. In particular, what was your bot's algorithm? If you read anything which inspired it, please cite it (just a link and brief description of how you used the resource is fine)._
-
 ### Actions and Wall-Kicks
 
 ### Tetris Bot
 The bad bot is represented by the ```BadBot``` struct and will hard drop every piece. The expected behavior is that the bad bot should top out very fast.
 
-The good bot is represented by the ```PlacementBot``` and ```MultiplayerPlacementBot``` structs for single- and multiplayer Tetris, respectively. We define ```DEPTH``` as the number of generated pieces to consider after the current piece and for each frame, the bot's determines its next action input as follows:
+The good bot is represented by the ```PlacementBot``` and ```MultiplayerPlacementBot``` structs for single- and multiplayer Tetris, respectively. We define ```DEPTH``` as the number of generated pieces to consider after the current piece (we use ```DEPTH = 1```). For each frame, the bot determines its next action input as follows:
 1) The bot's ```plan``` represents the sequence of actions that reaches the single best placement found before a piece is hard dropped. When ```plan``` is populated, the bot will execute one action per frame.
-2) If ```plan``` is empty, the bot determines its next sequence of actions by copying ```Game```
+2) If ```plan``` is empty, the bot will try every possible placement of the current piece. BFS is performed over ```L, R, C``` and ```W``` action inputs, keeping only sequences of moves that leave the piece in a feasible placement and in the same row. Wall-kicks that change the height of the piece are skipped, and each (column, rotation) is visited once, so the path kept is the shortest.
+3) For each reachable spot, the bot will copy ```Game```, hard drop the piece from this placement, and record the path and resulting game state. The copy includes the piece generator, so the resulting game spawns the actual next piece and the bot knows exactly which pieces come next. These placements are scored in parallel with Rayon as follows:
+    - If a piece is locked, ```score = (rows_cleared * 200) + future_score(resulting game, DEPTH)```. ```future_score``` runs the same placement and drop simulation on the next piece and keeps its best score (scored with ```DEPTH - 1```). Once ```DEPTH``` reaches 0, it returns ```-board_cost``` of the final board, so line clears are rewarded at every step but the board itself is only judged at the end.
+    - If the player tops out, or a future piece has nowhere to go, ```score = -1,000,000```.
+    - ```board_cost = HOLE_COST * holes + FLATNESS_COST * flatness + HEIGHT_COST * height```, using the constants below:
+
+      | constant | value | applied to |
+      |---|---|---|
+      | ```LINE_CLEAR_REWARD``` | 200 | each row cleared, at every step |
+      | ```HOLE_COST``` | 20 | each empty cell with a filled cell above it in the same column |
+      | ```FLATNESS_COST``` | 1 | cells needed to fill every column up to the tallest one, minus the deepest column (one well is free) |
+      | ```HEIGHT_COST``` | 1 | row of the highest filled cell |
+      | ```TOP_OUT_COST``` | 1,000,000 | any placement that tops out |
+
+4) The placement with the highest score (ties go to the shorter path) gets the hard drop action added to the end of its action sequence, which then becomes the bot's new ```plan```.
+5) After the bot executes ```plan```'s next action, it will continue following ```plan``` if the piece did not fall a row, lock, or cause the bot to top out. Otherwise, the ```plan``` is thrown away and ```get_move``` replans from scratch.
+
+```MultiplayerPlacementBot``` also keeps copies of both players' games and the garbage queues, replaying both players' actions every frame so its copy matches the real match (it treats itself as player 1, so its own action comes first). It searches only its own board and ignores the opponent and pending garbage. Garbage only lands when a piece locks, between plans, so the next search already sees it.
+
 
 ### Harness
 
