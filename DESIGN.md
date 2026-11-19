@@ -116,7 +116,7 @@ _Because I am a terrible programmer, I only tested the design of ```main.rs, gam
 
 ## 4. Reflection
 ### Work Credits
-**Cam**:
+**Cam**: Implemented Actions in `board.rs` and `game.rs` (movement, dropping, piece locking, wall kicks/rotation). Implemented the `--trace-bot-run` harness and corresponding CLI flags.
 
 **Utku**:
 
