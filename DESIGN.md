@@ -105,6 +105,15 @@ The good bot is represented by the ```PlacementBot``` and ```MultiplayerPlacemen
 
 ### Harness
 
+The harnesses for multiplayer play and bot play follow similar procedures:
+
+- Wait for a move from all (both) players
+- Write a trace file for the corresponding player with the move
+- Apply the move to the player's respective `Game` and update its `GameLog`
+- Tell each player the other players' moves
+
+For each player there exists a copy of the game state from the point of view of that player.
+
 ### Garbage 
 One ```Garbage``` instance represents a block of aligned garbage that takes up ```num_rows_to_create``` rows in the player's board. We use a queue to track of a player's accumulated blocks of garbage in order of its age. The implementation details of garbage removal is as follows:
 1) We want to remove the oldest pieces of garbage first. One cleared row can only remove one piece or row of garbage (if drawn on the board). As a result, we decrement a ```Garbage```'s ```num_rows_to_create``` by ```min(num_cleared_rows, num_rows_to_create)```.
