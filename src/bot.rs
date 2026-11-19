@@ -115,8 +115,8 @@ const FLATNESS_COST: f64 = 1.0;
 const HEIGHT_COST: f64 = 1.0;
 const LINE_CLEAR_REWARD: f64 = 200.0;
 /// Number of generated pieces to consider after the current piece.
-/// DEPTH = 2 plans placements for the current piece and the next two.
-pub const DEPTH: usize = 2;
+/// DEPTH = 1 plans placements for the current piece and the next two.
+pub const DEPTH: usize = 1;
 const TOP_OUT_COST: f64 = 1_000_000.0;
 
 impl PlacementBot {
