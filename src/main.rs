@@ -1,21 +1,24 @@
 use std::error::Error;
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-mod action_inputs;
-mod board;
-mod game;
-mod load_resources;
-mod random;
-mod resources;
-mod multiplayer;
+pub mod action_inputs;
+pub mod board;
+pub mod bot;
+pub mod game;
+pub mod load_resources;
+pub mod multiplayer;
+pub mod random;
+pub mod resources;
 
 use action_inputs::{Action, parse_action_input};
 use game::{Game, GameState};
-use multiplayer::GameLog;
 use load_resources::load_resources;
+use multiplayer::GameLog;
+use bot::{BadBot, MultiPlayerBot, MultiplayerPlacementBot};
 use resources::{Config, Tetrominoes};
 
 /// Command-line arguments.
@@ -35,11 +38,49 @@ struct Args {
     ///     tetrominoes.json
     #[arg(long, default_value = "resources")]
     resources: PathBuf,
+
+    /// Print the list of available bots
+    #[arg(long)]
+    list_bots: bool,
+
+    /// Runs both specified bots and makes them play against each other until one wins
+    #[arg(long, requires_all = ["p1", "o1", "p2", "o2"])]
+    trace_bot_run: bool,
+
+    /// bot1 name
+    #[arg(long)]
+    p1: Option<String>,
+
+    /// bot1 trace output file
+    #[arg(long)]
+    o1: Option<PathBuf>,
+
+    /// bot2 name
+    #[arg(long)]
+    p2: Option<String>,
+
+    /// bot2 trace output file
+    #[arg(long)]
+    o2: Option<PathBuf>,
 }
 
-fn run_single_player(path: &Path, config: Config, tetrominoes: Tetrominoes) -> Result<(), Box<dyn Error>> {
-    let inputs = fs::read_to_string(path)
-        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+/// Prints the list of available bots.
+fn list_bots() {
+    // this is not kept in sync automatically with the actual bots we have
+    // but tbh that would be overengineered for what we need
+    let bots = ["good-bot", "bad-bot"];
+    for bot in bots {
+        println!("{bot}");
+    }
+}
+
+fn run_single_player(
+    path: &Path,
+    config: Config,
+    tetrominoes: Tetrominoes,
+) -> Result<(), Box<dyn Error>> {
+    let inputs =
+        fs::read_to_string(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
     let actions = parse_action_input(&inputs)?; // dyn Error cuz who knows what error panic ? could be
 
     let mut game = Game::new(config, tetrominoes)?;
@@ -54,12 +95,16 @@ fn run_single_player(path: &Path, config: Config, tetrominoes: Tetrominoes) -> R
 
 /// Reads and parses one input file into a list of per-frame actions.
 fn read_actions(path: &Path) -> Result<Vec<Action>, Box<dyn Error>> {
-    let inputs = fs::read_to_string(path)
-        .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    let inputs =
+        fs::read_to_string(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
     Ok(parse_action_input(&inputs)?)
 }
 
-fn run_multi_player(paths: &[PathBuf], config: Config, tetrominoes: Tetrominoes) -> Result<(), Box<dyn Error>> {
+fn run_multi_player(
+    paths: &[PathBuf],
+    config: Config,
+    tetrominoes: Tetrominoes,
+) -> Result<(), Box<dyn Error>> {
     let mut game_log = GameLog::new(config, paths.len());
     let mut games = Vec::new();
     let mut actions = Vec::new();
@@ -67,20 +112,32 @@ fn run_multi_player(paths: &[PathBuf], config: Config, tetrominoes: Tetrominoes)
         games.push(Game::new(config, tetrominoes.clone())?);
         actions.push(read_actions(path)?);
     }
-    let frames = actions.iter()
-        .map(|player_actions| player_actions.len()).max().unwrap_or(0);
+    let frames = actions
+        .iter()
+        .map(|player_actions| player_actions.len())
+        .max()
+        .unwrap_or(0);
 
     for frame in 0..frames {
-        if game_log.game_states.iter().all(|&b| b == GameState::ToppedOut ) {  // are we all topped out
+        if game_log
+            .game_states
+            .iter()
+            .all(|&b| b == GameState::ToppedOut)
+        {
+            // are we all topped out
             break;
         }
         for player in 0..paths.len() {
             // games[idx].garbage().update(cleared: usize, opp_num_rows_to_create: usize, opp_cleared: usize) -> Option<{num_garbage: usize, empty_col: usize}>
-            if let Some(action) = actions[player].get(frame) && game_log.game_states[player] != GameState::ToppedOut {
+            if let Some(action) = actions[player].get(frame)
+                && game_log.game_states[player] != GameState::ToppedOut
+            {
                 match games[player].update(*action)? {
                     GameState::ToppedOut => game_log.topped_out(player), // kill the person
-                    GameState::Playing => {},
-                    GameState::Locked{ rows_cleared } => game_log.update_cleared(player, rows_cleared)
+                    GameState::Playing => {}
+                    GameState::Locked { rows_cleared } => {
+                        game_log.update_cleared(player, rows_cleared)
+                    }
                 }
             }
         }
@@ -96,16 +153,58 @@ fn run_multi_player(paths: &[PathBuf], config: Config, tetrominoes: Tetrominoes)
     Ok(())
 }
 
+/// Gets a bot from its corresponding name. 
+/// TODO: real error type if we ever get around to caring
+fn bot_from_name(bot_name: &str, config: &Path) -> Result<Box<dyn MultiPlayerBot>, String> {
+    match bot_name {
+        "good-bot" => Ok(Box::new(MultiplayerPlacementBot::new(config))),
+        "bad-bot" => Ok(Box::new(<BadBot as MultiPlayerBot>::new(config))),
+        other_name => Err(format!("{other_name} is not a valid bot type"))
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let (config, tetrominoes) = load_resources(&args.resources)?;
 
-    if let Some(path) = &args.simulate_inputs_single_player {
+    if args.list_bots {
+        list_bots();
+    } else if let Some(path) = &args.simulate_inputs_single_player {
         run_single_player(path, config, tetrominoes)?;
-    }
-    else if !args.simulate_inputs_multi_player.is_empty() {
+    } else if !args.simulate_inputs_multi_player.is_empty() {
         run_multi_player(&args.simulate_inputs_multi_player, config, tetrominoes)?;
-    }
+    } else if args.trace_bot_run {
+        let mut bots = [bot_from_name(&args.p1.unwrap(), &args.resources)?, bot_from_name(&args.p2.unwrap(), &args.resources)?];
+        // write as we go
+        let mut trace_files = [BufWriter::new(File::create(args.o1.as_ref().unwrap())?),BufWriter::new(File::create(args.o2.as_ref().unwrap())?)];
+        let mut game_log = GameLog::new(config, 2);
+        let mut games = vec![ Game::new(config, tetrominoes.clone())?,  Game::new(config, tetrominoes.clone())?];
 
+        while !game_log.game_states.contains(&GameState::ToppedOut) {
+            let moves = [bots[0].get_move(), bots[1].get_move()];
+            
+            for player in 0..2 {
+                let move_string = format!("{:?}", moves[player]);
+                trace_files[player].write_all(move_string.as_bytes())?;
+                match games[player].update(moves[player].into())? {
+                    GameState::ToppedOut => game_log.topped_out(player), // kill the person
+                    GameState::Playing => {}
+                    GameState::Locked { rows_cleared } => {
+                        game_log.update_cleared(player, rows_cleared)
+                    }
+                }
+            }
+            game_log.update(&mut games)?;
+            for player in 0..2 {
+                bots[player].update_with(&[moves[player], moves[(player+1)%2]]);
+            }
+        }
+        // print both boards side by side, row by row, separated by four spaces
+        let p1_board = games[0].serialize();
+        let p2_board = games[1].serialize();
+        for (p1_row, p2_row) in p1_board.lines().zip(p2_board.lines()) {
+            println!("{p1_row}    {p2_row}");
+        }
+    }
     Ok(())
 }

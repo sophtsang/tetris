@@ -1,21 +1,18 @@
 use crate::resources::Tetromino;
-use rand::Rng;
+use rand::{SeedableRng, seq::SliceRandom};
 use rand_xoshiro::Xoshiro128PlusPlus;
-use rand::{seq::SliceRandom, SeedableRng};
 
 type RngAlgorithm = Xoshiro128PlusPlus;
 
+#[derive(Clone, Debug)]
 pub struct PieceGenerator {
     bag: [Tetromino; 7],
     idx: usize,
-    rng: RngAlgorithm
+    rng: RngAlgorithm,
 }
 
 impl PieceGenerator {
-    pub fn new(
-        mut bag: [Tetromino; 7],
-        seed: <RngAlgorithm as SeedableRng>::Seed
-    ) -> Self {
+    pub fn new(mut bag: [Tetromino; 7], seed: <RngAlgorithm as SeedableRng>::Seed) -> Self {
         let mut rng = RngAlgorithm::from_seed(seed);
         bag.shuffle(&mut rng);
         Self { idx: 0, bag, rng }

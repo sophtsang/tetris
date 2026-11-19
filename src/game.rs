@@ -3,15 +3,16 @@ use crate::board::Board;
 use crate::random::PieceGenerator;
 use crate::resources::{Config, Tetromino, Tetrominoes};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameState {
-    Locked{ rows_cleared: usize }, // a piece is locked
+    Locked { rows_cleared: usize }, // a piece is locked
     Playing,
     ToppedOut,
 }
 
+#[derive(Clone, Debug)]
 pub struct Game {
-    board: Board,
+    pub board: Board,
     config: Config,
     piece_generator: PieceGenerator,
     // a way to represent the number of frames before the piece moves
@@ -65,15 +66,21 @@ impl Game {
             if self.spawn_new_piece().is_err() {
                 Ok(GameState::ToppedOut)
             } else {
-                Ok(GameState::Locked{ rows_cleared: rows_cleared })
+                Ok(GameState::Locked {
+                    rows_cleared: rows_cleared,
+                })
             }
         }
     }
 
-    pub fn generate_garbage(&mut self, num_rows_to_create: usize, empty_col: usize) -> Result<GameState, String> {
+    pub fn generate_garbage(
+        &mut self,
+        num_rows_to_create: usize,
+        empty_col: usize,
+    ) -> Result<GameState, String> {
         match self.board.generate_garbage(num_rows_to_create, empty_col) {
             true => Ok(GameState::Playing),
-            false => Ok(GameState::ToppedOut)
+            false => Ok(GameState::ToppedOut),
         }
     }
 

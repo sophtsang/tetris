@@ -36,8 +36,6 @@ to generate a value of type `Tetrominoes` that acts as a lookup table mapping
 tetromino names to configurations (instead of an arbitrarily-indexed 
 fixed-length array).
 
-_TODO: maybe some more stuff idk_
-
 ### [```main```](src/main.rs)
 The ```main``` module initializes and runs the game loop. We define the ```Args``` struct for representing command-line arguments such as game flags and config paths. The `clap` library was used for parsing these command-line arguments.
 
@@ -58,9 +56,9 @@ Most of the game logic is contained within ```update()```, where per frame:
 4) A ```GameState``` is returned to inform ```main``` and ```multiplayer``` about any changes in the player's game state.
 
 ### [```board```](src/board.rs)
-The ```board``` module contains piece and game board logic, along with how the game is visualized to the user. The purpose of having separate ```game``` and ```board``` modules is to decouple logic between game and board states.
+The ```board``` module contains piece and game board logic, along with how the game is visualized to the user. Specifically, this module takes care of how the piece interacts with the board for each action frame. This includes updating the pose of a piece, drawing pieces and generated garbage onto a board, clearing rows, etc. The purpose of having separate ```game``` and ```board``` modules is to decouple logic between game and board states.
 
-_TODO: elaborate on board architecture and impl blah blah blah yap_.
+We define the ```Board``` struct to contain a flattened representation of the game board and keep track of the state of the currently falling tetromino piece. 
 
 ### [```random```](src/randoms.rs)
 The ```random``` module contains logic for generating a new piece. We define a ```PieceGenerator``` struct that represents a bag randomizer of the 7 ```Tetromino``` variants. The ```Xoshiro128PlusPlus``` algorithm is used as the random number generator along with a random seed provided by ```config.json```. ```PieceGenerator``` models the 7-bag random generator that Tetris uses, and guarantees that all 7 possible tetromino pieces are able to be eventually drawn.
@@ -81,8 +79,6 @@ The ```action_inputs``` module contains the definition of an ```Action``` enum t
 ### [```load_resources```](src/load_resources.rs)
 The ```load_resources``` module contains logic for parsing simulated game files and configs. 
 
-_TODO: whatever RawTetrominoConfig is: String wall_kick instead of WallKick_
-
 
 ## 2. Implementation: 
 _TODO: Describe any interesting algorithms you use or otherwise creative or non-obvious implementation decisions. In particular, what was your bot's algorithm? If you read anything which inspired it, please cite it (just a link and brief description of how you used the resource is fine)._
@@ -90,6 +86,11 @@ _TODO: Describe any interesting algorithms you use or otherwise creative or non-
 ### Actions and Wall-Kicks
 
 ### Tetris Bot
+The bad bot is represented by the ```BadBot``` struct and will hard drop every piece. The expected behavior is that the bad bot should top out very fast.
+
+The good bot is represented by the ```PlacementBot``` and ```MultiplayerPlacementBot``` structs for single- and multiplayer Tetris, respectively. We define ```DEPTH``` as the number of generated pieces to consider after the current piece and for each frame, the bot's determines its next action input as follows:
+1) The bot's ```plan``` represents the sequence of actions that reaches the single best placement found before a piece is hard dropped. When ```plan``` is populated, the bot will execute one action per frame.
+2) If ```plan``` is empty, the bot determines its next sequence of actions by copying ```Game```
 
 ### Harness
 
@@ -105,35 +106,53 @@ Only if a player's current piece is locked and they have ```Garbage``` with ```f
 The timer for each ```Garbage``` in a player's queue is decremented after garbage blocks are possibly generated onto their board. This timer is separate from ```frames_since_next_gravity_event```, which is incremented and determines when a piece is moved down.
 ___
 ### Performance
-_TODO: Explain where you expect there may be performance bottlenecks in your code and how you identified these spots._
+We have a profiler that plays the bot on a fixed game until it clears 40 lines, once as the single player bot and once as the multiplayer bot against an idle opponent. It times every move the bot makes, counts how many frames the bot spends on each piece, and records the slowest move per piece, which is the frame where the bot plans its placement. It also times the individual operations the bot's search repeats for every placement it tries.
+
+All measurements below come from running the profiler on a 22-core WSL2 machine.
+
+| single player | ```DEPTH = 1``` |
+|---|---|
+| frames / pieces to clear 40 lines | 489 / 122 |
+| frames per piece | on average 4.0 |
+| search time per piece (median) | 1.75-1.84 ms |
+| search time per piece (max) | 2.9-4.2 ms |
+| ```get_move``` on non-search frames (median) | < 40 ns |
+| ```get_move``` averaged over all frames | 0.42-0.44 ms |
+| ```update_with``` per frame | avg ~0.15 µs, max 1-30 µs |
+| whole 40-line run (wall-clock / CPU) | ~0.21 s / ~1.1 s |
+
+| operation (```parts```) | average time |
+|---|---|
+| ```Game::clone``` | 333 ns |
+| ```Board::clone``` | 319 ns |
+| ```Game::clone``` + hard drop | 634 ns |
+| board cost (holes + flatness + height) | 268 ns |
+
+### Bottlenecks
+1. **All of the work happens on one frame per piece.** This means that the good-bot searches only when its plan is empty, i.e. on the first frame of a new piece. So the worst frame, not the average frame, decides whether the bot meets the 1/60 s multiplayer budget. When ```DEPTH = 2```, almost every piece's took more than 1/60s to output an action.
+2. **The search is exponential in ```DEPTH```.** Each piece has up to a few dozen (column, rotation) placements, and the bot tries every placement of the current piece and the next ```DEPTH``` pieces, so the number of simulated drops is roughly (placements)^(```DEPTH``` + 1). Going from ```DEPTH = 2``` to ```DEPTH = 1``` removes one factor of possible placements and allows for search time to be confined within the 1/60 s cap.
+3. **Every simulated placement clones a full ```Game```.** Each clone + drop takes ~634 ns no matter the depth, so the search time grows with the number of placements tried: ~50 ms per search with ```DEPTH = 2```, and ~1.8 ms with ```DEPTH = 1```, where the bot tries far fewer placements. Cloning is expensive because each ```Board``` owns its own copy of ```Tetrominoes``` (7 shapes with 4 wall-kick ```Vec```s each), which never changes during a game. ```drop_options``` also clones the board twice per placement.
+4. **Symmetric placements are searched more than once.** Rotations of O (and the two equivalent rotations of I, S and Z) can produce the same board, so those subtrees are repeated.
+
+To address these bottlenecks:
+1. **Rayon**: the bot scores each placement of the current piece in parallel, which made a DEPTH = 2 run use about 16x more CPU time than wall time.
+2. **Plan once per piece**: the bot saves the moves for its chosen placement and only searches again when a new piece spawns, so the other frames of a piece cost almost nothing.
 
 ## 3. Testing: 
-_TODO: Describe how you tested your design and what parts of your project
-did you devote more or less verification effort towards.
-verification effort towards._
+The design of simulated single- and multiplayer Tetris games was verified mainly on the provided single- and multiplayer [cli-tests](/cli-tests). Specifically, these CLI tests covered gravity and drop timing, piece movement, hard drops, wall kicks, line clears, and topping out behaviors. For multiplayer Tetris, garbage generation behavior was also verified. Beyond the provided CLI tests, expected behavior in piece spawning, locking, and overlaps with the board, along with row-clearing in the ```board``` module was verified on unit tests. Correct configuration from the provided JSON files were also verified on unit tests in ```resources```.
 
-_Because I am a terrible programmer, I only tested the design of ```main.rs, game.rs, random.rs``` and ```multiplayer.rs``` (garbage functionality) on the provided single- and multiplayer [cli-tests](/cli-tests)._
+Checks that the single- and multiplayer Tetris bots implementations matched the required interface were done via [tests](/tests/tests.rs). The good bot's ability to 40 lines was verified over [bot_40_lines](/tests/bot_40_lines.rs) tests.
 
 ## 4. Reflection
 ### Work Credits
-**Cam**:
+**Cam**: Implemented Actions in `board.rs` and `game.rs` (movement, dropping, piece locking, wall kicks/rotation). Implemented the `--trace-bot-run` harness and corresponding CLI flags.
 
-**Utku**:
+**Utku**: Implemented single and multiplayer Tetris bots in ```bot.rs```.
 
-**Sidharth**:
+**Sidharth**: Worked on implementation of board-related functionality in ```board``` module. Implemented single and multiplayer Tetris bots in ```bot.rs```.
 
-**Xueqing**: Worked on outlining the single- and multiplayer game loops in ```main.rs```. Implemented multiplayer support and the garbage mechanic in ```multiplayer.rs```. 
+**Xueqing**: Worked on outlining the single- and multiplayer game loops in ```main.rs```. Implemented the multiplayer Tetris garbage mechanic in ```multiplayer.rs```. 
 ___ 
-### Known Issues
-If there is something you know doesn't work, describe it here. 
-
-_Everything works, we're goated._
-___
 ### Meta Comments
-_TODO: Write any opinions on the assignment. Some things we are
-  curious about are:_
-  - how long did you spend on the assignment, which parts took the longest?
-  - what did you like and dislike about the assignment, why?
-  - is there anything you'd like to change about the assignment?
-
+Each member spent around 10-15 hrs on the entire assignment, with implementation of the good bot, multiplayer Tetris garbage mechanic, and harness taking the longest.
 ___ 

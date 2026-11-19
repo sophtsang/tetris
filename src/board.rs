@@ -2,6 +2,7 @@ use crate::resources::{Offset, Tetromino, Tetrominoes};
 
 const BUFFER_SIZE: usize = 2;
 
+#[derive(Clone, Debug)]
 pub struct Board {
     grid: Vec<u32>,
     pub width: usize,
@@ -147,6 +148,50 @@ impl Board {
         self.grid[first_buffer_cell..].iter().any(|&cell| cell != 0)
     }
 
+    /// Count empty visible cells with a locked cell above them in the same column.
+    pub fn hole_count(&self) -> usize {
+        let mut holes = 0;
+        for x in 0..self.width {
+            let mut filled_above = false;
+            for y in (0..self.height).rev() {
+                if self.grid[y * self.width + x] != 0 {
+                    filled_above = true;
+                } else if filled_above {
+                    holes += 1;
+                }
+            }
+        }
+        holes
+    }
+
+    /// Cells needed to level column tops, ignoring one deepest well.
+    pub fn flatness_cost(&self) -> usize {
+        let heights: Vec<usize> = (0..self.width)
+            .map(|x| {
+                (0..self.height)
+                    .rev()
+                    .find(|&y| self.grid[y * self.width + x] != 0)
+                    .map_or(0, |y| y + 1)
+            })
+            .collect();
+        let highest = heights.iter().copied().max().unwrap_or(0);
+        let total_to_flatten: usize = heights.iter().map(|&height| highest - height).sum();
+        let deepest_well = heights
+            .iter()
+            .map(|&height| highest - height)
+            .max()
+            .unwrap_or(0);
+        total_to_flatten - deepest_well
+    }
+
+    /// Highest visible row containing a locked cell, with row zero at the bottom.
+    pub fn highest_filled_row(&self) -> Option<usize> {
+        self.grid[..self.height * self.width]
+            .iter()
+            .rposition(|&cell| cell != 0)
+            .map(|index| index / self.width)
+    }
+
     /// Whether any cell of the current falling piece is in a buffer row.
     pub fn current_piece_in_buffer(&self) -> bool {
         let Ok(rotation) = self.current_rotation() else {
@@ -185,7 +230,8 @@ impl Board {
             valid = false;
         }
         // move up 0 -> end to start -> self.height
-        self.grid.copy_within(0..(row_count * self.width) - start, start); 
+        self.grid
+            .copy_within(0..(row_count * self.width) - start, start);
 
         self.grid[0..start].fill(1);
         for row in 0..num_rows_to_create {
@@ -285,11 +331,24 @@ impl Board {
             None => false,
             Some(piece) => {
                 let config = self.tetrominoes.config(piece);
-                let target_rotation = (self.current_piece_rotation_state_idx + if clockwise { 1 } else { 4 - 1 }) % 4; // +1 if clockwise, -1 if ccw (4-1 to avoid overflow)
+                let target_rotation =
+                    (self.current_piece_rotation_state_idx + if clockwise { 1 } else { 4 - 1 }) % 4; // +1 if clockwise, -1 if ccw (4-1 to avoid overflow)
                 let target_rotation_states = config.states[target_rotation];
-                let wallkick_table = [&config.wall_kick.o, &config.wall_kick.r, &config.wall_kick.t, &config.wall_kick.l];
+                let wallkick_table = [
+                    &config.wall_kick.o,
+                    &config.wall_kick.r,
+                    &config.wall_kick.t,
+                    &config.wall_kick.l,
+                ];
                 for i in 0..wallkick_table[self.current_piece_rotation_state_idx].len() {
-                    let destination = [self.current_piece_position[0] + wallkick_table[self.current_piece_rotation_state_idx][i][0] - wallkick_table[target_rotation][i][0], self.current_piece_position[1] + wallkick_table[self.current_piece_rotation_state_idx][i][1] - wallkick_table[target_rotation][i][1]];
+                    let destination = [
+                        self.current_piece_position[0]
+                            + wallkick_table[self.current_piece_rotation_state_idx][i][0]
+                            - wallkick_table[target_rotation][i][0],
+                        self.current_piece_position[1]
+                            + wallkick_table[self.current_piece_rotation_state_idx][i][1]
+                            - wallkick_table[target_rotation][i][1],
+                    ];
                     if !self.overlaps(destination, target_rotation_states) {
                         self.current_piece_position = destination;
                         self.current_piece_rotation_state_idx = target_rotation;
@@ -319,6 +378,40 @@ mod tests {
             actual == expected,
             "board mismatch:\nexpected:\n{expected}\nactual:\n{actual}"
         );
+    }
+
+    #[test]
+    fn counts_holes_under_locked_cells() {
+        let mut grid = vec![0; 4 * (4 + BUFFER_SIZE)];
+        for (x, y) in [(0, 2), (1, 0), (1, 2), (3, 0), (3, 1)] {
+            grid[y * 4 + x] = 1;
+        }
+        let board = Board::new_testing(4, 4, TEST_TETROMINOES, grid);
+        assert_eq!(board.hole_count(), 3);
+    }
+
+    #[test]
+    fn measures_flatness_and_highest_filled_row() {
+        let mut grid = vec![0; 4 * (4 + BUFFER_SIZE)];
+        for (x, y) in [
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (1, 0),
+            (1, 2),
+            (2, 0),
+            (3, 0),
+            (3, 1),
+        ] {
+            grid[y * 4 + x] = 1;
+        }
+        let board = Board::new_testing(4, 4, TEST_TETROMINOES, grid);
+        assert_eq!(board.flatness_cost(), 1);
+        assert_eq!(board.highest_filled_row(), Some(2));
+
+        let empty = Board::new(4, 4, TEST_TETROMINOES);
+        assert_eq!(empty.flatness_cost(), 0);
+        assert_eq!(empty.highest_filled_row(), None);
     }
 
     #[test]
