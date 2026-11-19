@@ -84,6 +84,17 @@ The ```load_resources``` module contains logic for parsing simulated game files 
 _TODO: Describe any interesting algorithms you use or otherwise creative or non-obvious implementation decisions. In particular, what was your bot's algorithm? If you read anything which inspired it, please cite it (just a link and brief description of how you used the resource is fine)._
 
 ### Actions and Wall-Kicks
+`action_inputs.rs` contains an enum `Action` with a descriptively-named variant for each type of action, as well as a function `parse_action_input` that takes an input string and attempts to parse it into a vector of `Action`s. 
+
+On every frame, the game reads the player's next action. The action then both moves the current piece (or not, depending on the action) and updates the number of frames in the game state to track gravity.
+
+By designing the `board.rs/move_current_piece` function to succeed even if the piece on the board does not actually move upon acting (e.g. when it is against a wall), we can simply call this function every time a movement action occurs.
+
+#### Wall-Kicks
+
+Since it is not guaranteed for the kick table configuration file to exist, we load the kick table first as a `RawTetrominoConfig`, then convert it into a `TetrominoConfig` containing the wall kick table if the file can be loaded successfully. 
+
+To actually perform a wall kick, the function `rotate_current_piece` iterates through the stored kick table in order. For each wall kick, it calculates the resulting location; if there are no overlaps between the existing board and the piece's new location, it chooses that wall kick.
 
 ### Tetris Bot
 The bad bot is represented by the ```BadBot``` struct and will hard drop every piece. The expected behavior is that the bad bot should top out very fast.
