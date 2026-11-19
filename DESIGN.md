@@ -100,8 +100,8 @@ To actually perform a wall kick, the function `rotate_current_piece` iterates th
 The bad bot is represented by the ```BadBot``` struct and will hard drop every piece. The expected behavior is that the bad bot should top out very fast.
 
 The good bot is represented by the ```PlacementBot``` and ```MultiplayerPlacementBot``` structs for single- and multiplayer Tetris, respectively. We define ```DEPTH``` as the number of generated pieces to consider after the current piece and for each frame, the bot's determines its next action input as follows:
-1) The bot's plan is a queue of ```Actions```, 
-2) If the plan is empty, then 
+1) The bot's ```plan``` represents the sequence of actions that reaches the single best placement found before a piece is hard dropped. When ```plan``` is populated, the bot will execute one action per frame.
+2) If ```plan``` is empty, the bot determines its next sequence of actions by copying ```Game```
 
 ### Harness
 
