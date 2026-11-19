@@ -650,7 +650,7 @@ pub trait MultiPlayerBot {
     /// every frame.
     fn get_move(
         &mut self,
-        p1_state: &BoardState,
+        p1_state: &BoardState,h
         p1_garbage: &[GarbageLine],
         p2_state: &BoardState,
         p2_garbage: &[GarbageLine],
